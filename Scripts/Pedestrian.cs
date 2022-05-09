@@ -5,7 +5,19 @@ using UnityEngine;
 public class Pedestrian : MonoBehaviour
 {
 
+    public enum PedestrianState {
+        IDLE,
+        WALKING,
+        WAITING,
+        ARRIVED
+    };
+
     private PedestrianController _controller;
+    
+    public PedestrianState state = PedestrianState.IDLE;
+    public Vector3 currentGoal;
+    public int currentGoalIndex;
+    public int finalGoalIndex;
     
     public float walkingSpeed;
     public float viewRadius;
@@ -27,16 +39,21 @@ public class Pedestrian : MonoBehaviour
      */
     public void Setup(Node start, Node destination, float walkingSpeed, float viewRadius)
     {
+        this.walkingSpeed = walkingSpeed;
+        this.viewRadius = viewRadius;
+    
         bool success = Graph.AStar(start, destination, out List<Node> goalList);
         if (!success)
             throw new Exception("couldn't find a solution for node");
-        Vector3 direction = goalList[1].position - goalList[0].position;
+        
+        currentGoal = goalList[1].position;
+        currentGoalIndex = 1;
+        finalGoalIndex = goalList.Count - 1;
 
-        this.walkingSpeed = walkingSpeed;
-        this.viewRadius = viewRadius;
         
         position = start.position;
-        velocity = direction.normalized * walkingSpeed;
+        Vector3 direction = (currentGoal - position).normalized;
+        velocity = direction * walkingSpeed;
         bounds = new Bounds {
             center = position,
             size = Vector3.one
@@ -55,23 +72,58 @@ public class Pedestrian : MonoBehaviour
 
     public void UpdateStatus(float deltaTime)
     {
-        // F = m . a     when the mass is constant (1) F = a
-        effectingForces = avoidance + alignment + cohesion;
-        velocity += effectingForces;
-        velocity = velocity.normalized * walkingSpeed;
-        position += velocity * deltaTime;
-        
-        // temp
-        if (position.x < 0) position.x += 100;
-        if (position.z < 0) position.z += 100;
-        if (position.x > 100) position.x -= 100;
-        if (position.z > 100) position.z -= 100;
-        
-        transform.position = position;
-        transform.forward = velocity.normalized;
-        
-        bounds.center = position;
-        ahead = position + velocity;
+        switch (state)
+        {
+            case PedestrianState.IDLE:
+                state = PedestrianState.WALKING;
+                break;
+                
+            case PedestrianState.WALKING:
+                /*
+                 * // F = m . a     when the mass is constant (1) F = a
+                 * effectingForces = avoidance + alignment + cohesion;
+                 * velocity += effectingForces;
+                 * velocity = velocity.normalized * walkingSpeed;
+                 * position += velocity * deltaTime;
+                
+                 * // temp
+                 * if (position.x < 0) position.x += 100;
+                 * if (position.z < 0) position.z += 100;
+                 * if (position.x > 100) position.x -= 100;
+                 * if (position.z > 100) position.z -= 100;
+                 */
+                 
+                position += velocity * deltaTime;
+                
+                transform.position = position;
+                transform.forward = velocity.normalized;
+                
+                bounds.center = position;
+                ahead = position + velocity;
+                
+                if ((position - currentGoal).magnitude < 10)
+                {
+                    state = PedestrianState.WAITING;
+                }
+                break;
+                
+            case PedestrianState.WAITING:
+                if (currentGoalIndex == finalGoalIndex)
+                {
+                    state = PedestrianState.ARRIVED;
+                } else
+                {
+                    currentGoal = goalList[++currentGoalIndex].position;
+                    velocity = (currentGoal - position).normalized * walkingSpeed;
+                    ahead = position + velocity;
+                    state = PedestrianState.WALKING;
+                }
+                break;
+            
+            case PedestrianState.ARRIVED:
+                Debug.Log("pedestrian has reached their destination");
+                break;
+        }
     }
     
     
