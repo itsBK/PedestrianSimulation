@@ -40,9 +40,10 @@ public class PedestrianController : MonoBehaviour
 
     private void Update()
     {
+        float deltaTime = Time.deltaTime;
         foreach (var p in activePedestrians)
         {
-            p.UpdateStatus(Time.deltaTime);
+            p.UpdateStatus(deltaTime);
         }
     }
 
