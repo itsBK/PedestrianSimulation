@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
+using Vector3 = UnityEngine.Vector3;
 
 public class Pedestrian : MonoBehaviour
 {
@@ -10,64 +12,54 @@ public class Pedestrian : MonoBehaviour
         WALKING,
         WAITING,
         ARRIVED
-    };
+    }
 
     private PedestrianController _controller;
-    
+
+    public int id;
     public PedestrianState state = PedestrianState.IDLE;
+    public List<Node> goalList;
     public Vector3 currentGoal;
     public int currentGoalIndex;
     public int finalGoalIndex;
     
     public float walkingSpeed;
+    public float maxSteerForce;
     public float viewRadius;
+    //TODO: automatize this
+    public float modelWidth = 0.8f;
 
     public Vector3 position;
     public Vector3 velocity;
-    public Vector3 effectingForces;
-    public Bounds bounds;
+    public Vector3 steeringForces;
 
-    public Vector3 ahead;
-    
     public Vector3 avoidance;
-    public Vector3 alignment;
-    public Vector3 cohesion;
+    public Vector3 following;
 
 
-    /**
-     *  <param name="direction">must be normalized</param>
-     */
-    public void Setup(Node start, Node destination, float walkingSpeed, float viewRadius)
+    public void Setup(int id, Vector3 position, Node start, Node destination, float walkingSpeed, float maxSteerForce, float viewRadius)
     {
         this.walkingSpeed = walkingSpeed;
+        this.maxSteerForce = maxSteerForce;
         this.viewRadius = viewRadius;
     
-        bool success = Graph.AStar(start, destination, out List<Node> goalList);
+        bool success = Graph.AStar(start, destination, out goalList);
         if (!success)
             throw new Exception("couldn't find a solution for node");
         
-        currentGoal = goalList[1].position;
-        currentGoalIndex = 1;
+        currentGoal = start.position;
+        currentGoalIndex = 0;
         finalGoalIndex = goalList.Count - 1;
 
-        
-        position = start.position;
+        this.position = position;
         Vector3 direction = (currentGoal - position).normalized;
         velocity = direction * walkingSpeed;
-        bounds = new Bounds {
-            center = position,
-            size = Vector3.one
-        };
 
         transform.position = position;
         transform.forward = direction;
 
-        //ahead is a position in real world, not in local space (used to check collisions)
-        ahead = position + velocity;
-        
         avoidance = new Vector3();
-        alignment = new Vector3();
-        cohesion = new Vector3();
+        following = new Vector3();
     }
 
     public void UpdateStatus(float deltaTime)
@@ -79,29 +71,31 @@ public class Pedestrian : MonoBehaviour
                 break;
                 
             case PedestrianState.WALKING:
-                /*
-                 * // F = m . a     when the mass is constant (1) F = a
-                 * effectingForces = avoidance + alignment + cohesion;
-                 * velocity += effectingForces;
-                 * velocity = velocity.normalized * walkingSpeed;
-                 * position += velocity * deltaTime;
+                // F = m . a     when the mass is constant (1) F = a
+
+                //avoidance
+                // if (Physics.SphereCast(position, modelWidth, velocity.normalized, out RaycastHit hitInfo, viewRadius))
+                // {
+                //     avoidance = Vector3.right / 4;
+                //     avoidance = transform.TransformDirection(avoidance);
+                // } else
+                // {
+                //     avoidance = Vector3.zero;
+                // }
                 
-                 * // temp
-                 * if (position.x < 0) position.x += 100;
-                 * if (position.z < 0) position.z += 100;
-                 * if (position.x > 100) position.x -= 100;
-                 * if (position.z > 100) position.z -= 100;
-                 */
-                 
+                //TODO: different path width
+                following = FollowPath(position, currentGoal, 10);
+                avoidance = AvoidObstacles();
+                steeringForces = following + avoidance;
+                steeringForces = Mathf.Min(steeringForces.magnitude, maxSteerForce) * steeringForces.normalized;
+                velocity += steeringForces * deltaTime;
+                velocity = velocity.normalized * walkingSpeed;
                 position += velocity * deltaTime;
                 
                 transform.position = position;
                 transform.forward = velocity.normalized;
-                
-                bounds.center = position;
-                ahead = position + velocity;
-                
-                if ((position - currentGoal).magnitude < 10)
+
+                if (Vector3.Distance(position, currentGoal) < 1)
                 {
                     state = PedestrianState.WAITING;
                 }
@@ -115,7 +109,6 @@ public class Pedestrian : MonoBehaviour
                 {
                     currentGoal = goalList[++currentGoalIndex].position;
                     velocity = (currentGoal - position).normalized * walkingSpeed;
-                    ahead = position + velocity;
                     state = PedestrianState.WALKING;
                 }
                 break;
@@ -125,23 +118,44 @@ public class Pedestrian : MonoBehaviour
                 break;
         }
     }
-    
-    
-    /*
-     * FOR REFERENCE
-     *
-     * 
-    public float angle;
 
-    public void setup() {
-        this.angle = this.velocity.angle();
-    }
-
-    public void update(float deltaTime) {
-
-        this.angle = velocity.angle();
-        if (angle < 0) angle += 360f;
-        if (angle > 360f) angle -= 360f;
-    }
+    /**
+     * <returns>steering force required to follow the target</returns>
      */
+    public Vector3 Seek(Vector3 target)
+    {
+        Vector3 desiredVelocity = (position - target).normalized * walkingSpeed;
+        return desiredVelocity - velocity;
+    }
+
+    //TODO: include curved paths
+    public Vector3 FollowPath(Vector3 pathStart, Vector3 pathEnd, float pathWidth)
+    {
+        Vector3 ahead = position + velocity;
+        if (HandleUtility.DistancePointLine(ahead, pathStart, pathEnd) > pathWidth / 2)
+        {
+            // same as Vector3.Dot(pathEnd - pathStart, ahead) * (pathEnd - pathStart);
+            Vector3 projAheadOnPath = HandleUtility.ProjectPointLine(ahead, pathStart, pathEnd);
+            return Seek(projAheadOnPath);
+        }
+
+        return Vector3.zero;
+    }
+
+    public Vector3 AvoidObstacles()
+    {
+        if (Physics.SphereCast(position, modelWidth, velocity.normalized, out RaycastHit hit, viewRadius))
+        {
+            if (hit.transform.TryGetComponent(out Pedestrian pedestrian))
+            {
+                if (pedestrian.walkingSpeed < walkingSpeed)
+                {
+                    Vector3 hitPosition = transform.InverseTransformPoint(hit.point);
+                    // steer in opposite direction 
+                    return transform.TransformDirection(Vector3.left * hitPosition.x);
+                }
+            }
+        }
+        return Vector3.zero;
+    }
 }
