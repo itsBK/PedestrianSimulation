@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using UnityEngine;
+using System.Linq;
+using Vector3 = UnityEngine.Vector3;
 
 public class Graph
 {
@@ -14,51 +15,63 @@ public class Graph
     }
 
     public List<Node> nodes;
+    public List<Edge> edges;            // an edge can be used multiple times between different nodes
 
     public Graph()
     {
         nodes = new List<Node>();
+        edges = new List<Edge>();
         Setup();
     }
     
     public void Setup()
     {
-        Vector3[] positions = {
-            new Vector3(10, 0, 90),
-            new Vector3(50, 0, 90),
-            new Vector3(90, 0, 50),
-            new Vector3(50, 0, 10),
-            new Vector3(10, 0, 10),
+        (Vector3, float)[] nodes = {
+            (new Vector3(10, 0, 90), 5),
+            (new Vector3(50, 0, 90), 5),
+            (new Vector3(90, 0, 50), 5),
+            (new Vector3(50, 0, 10), 5),
+            (new Vector3(10, 0, 10), 5),
+        };
+
+        Edge[] edges = {
+            Edge.StraightEdge(0, 300),
+            Edge.StraightEdge(1, 500),
+            Edge.StraightEdge(2,  20),
+            Edge.StraightEdge(3, 700),
+            Edge.StraightEdge(4,  10),
         };
         
-        float[,] adjMatrix = {
-            {000, 300, 000, 500,  20},
-            {300, 000, 300, 000, 700},
-            {000, 300, 000,  10, 000},
-            {500, 000,  10, 000,  10},
-            { 20, 700, 000,  10, 000}
+        int[,] adjMatrix = {
+            {-1,  0, -1,  1,  2},
+            { 0, -1,  0, -1,  3},
+            {-1,  0, -1,  4, -1},
+            { 1, -1,  4, -1,  4},
+            { 2,  3, -1,  4, -1}
         };
-        SetGraphFrom(positions, adjMatrix);
+        SetGraphFrom(nodes, edges, adjMatrix);
     }
 
     /**
      * <param name="adjacencyMatrix">0 value represent no connection between the nodes</param>
      */
-    public void SetGraphFrom(Vector3[] positions, float[,] adjacencyMatrix)
+    public void SetGraphFrom((Vector3, float)[] nodes, Edge[] edges, int[,] adjacencyMatrix)
     {
-        int dimension = positions.Length;
+        int dimension = nodes.Length;
         for (int i = 0; i < dimension; i++)
         {
-            nodes.Add(new Node(i, positions[i]));
+            (Vector3, float) node = nodes[i];
+            this.nodes.Add(new Node(i, node.Item1, node.Item2));
         }
+        this.edges = edges.ToList();
         
         for (int x = 0; x < dimension; x++)
         {
             Node node = GetNodeByID(x);
             for (int y = 0; y < dimension; y++)
             {
-                if (adjacencyMatrix[x, y] > 0)
-                    node.AddDirectedEdge(GetNodeByID(y), adjacencyMatrix[x, y]);
+                if (adjacencyMatrix[x, y] >= 0)
+                    node.AddDirectedEdge(GetNodeByID(y), GetEdgeByID(adjacencyMatrix[x, y]));
             }
         }
     }
@@ -66,26 +79,50 @@ public class Graph
     public Node GetNodeByID(int id)
     {
         foreach (Node node in nodes)
-        {
             if (node.id == id)
-            {
                 return node;
-            }
-        }
 
-        throw new KeyNotFoundException("the node(id=" + id + ") could not be found in list of node");
+        throw new KeyNotFoundException("the node(id=" + id + ") could not be found in list of nodes");
     }
 
-    public float[,] GetAdjacencyMatrix()
+    public Edge GetEdgeByID(int id)
+    {
+        foreach (Edge edge in edges)
+            if (edge.id == id)
+                return edge;
+        
+        throw new KeyNotFoundException("the edge(id=" + id + ") could not be found in list of edges");
+    }
+
+    public (Vector3, float)[] GetNodesAsVectors()
+    {
+        List<(Vector3, float)> nodes = new List<(Vector3, float)>();
+        foreach (Node node in this.nodes)
+        {
+            nodes.Add((node.position, node.radius));
+        }
+
+        return nodes.ToArray();
+    }
+
+    public Edge[] GetEdges()
+    {
+        return edges.ToArray();
+    }
+
+    public int[,] GetAdjacencyMatrix()
     {
         int size = GetHighestID();
-        float[,] adjacencyMatrix = new float[size, size];
+        int[,] adjacencyMatrix = new int[size, size];
+        for (int x = 0; x < adjacencyMatrix.GetLength(0); x++)
+            for (int y = 0; y < adjacencyMatrix.GetLength(1); y++)
+                adjacencyMatrix[x, y] = -1;
 
         foreach (Node node in nodes)
         {
-            foreach (KeyValuePair<Node, float> neighbor in node.neighbors)
+            foreach (KeyValuePair<Node, Edge> neighbor in node.neighbors)
             {
-                adjacencyMatrix[node.id, neighbor.Key.id] = neighbor.Value;
+                adjacencyMatrix[node.id, neighbor.Key.id] = neighbor.Value.id;
             }
         }
         
@@ -116,9 +153,9 @@ public class Graph
         Node current = start;
         float currentGCost = 0;
         while (unvisited.Count != 0) {
-            foreach (KeyValuePair<Node, float> pair in current.neighbors) {
+            foreach (KeyValuePair<Node, Edge> pair in current.neighbors) {
                 Node neighbor = pair.Key;
-                float edgeCost = pair.Value;
+                float edgeCost = pair.Value.cost;
                 
                 // newly discovered node ? add to the list
                 if (!allNodes.ContainsKey(neighbor)) {

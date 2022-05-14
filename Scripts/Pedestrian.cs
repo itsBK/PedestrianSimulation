@@ -23,26 +23,25 @@ public class Pedestrian : MonoBehaviour
     public int currentGoalIndex;
     public int finalGoalIndex;
     
-    public float walkingSpeed;
-    public float maxSteerForce;
+    public float maxSteerForce = 1;
+    public float maxWalkingSpeed;
+    public float slowingDownDistance = 10;
     public float viewRadius;
     //TODO: automatize this
     public float modelWidth = 0.8f;
 
     public Vector3 position;
     public Vector3 velocity;
-    public Vector3 steeringForces;
-
-    public Vector3 avoidance;
-    public Vector3 following;
+    public Vector3 acceleration;
 
 
-    public void Setup(int id, Vector3 position, Node start, Node destination, float walkingSpeed, float maxSteerForce, float viewRadius)
+    public void Setup(int id, Vector3 position, Node start, Node destination, float maxWalkingSpeed, float viewRadius)
     {
-        this.walkingSpeed = walkingSpeed;
-        this.maxSteerForce = maxSteerForce;
+        _controller = transform.parent.GetComponent<PedestrianController>();
+        this.id = id;
+        this.maxWalkingSpeed = maxWalkingSpeed;
         this.viewRadius = viewRadius;
-    
+        
         bool success = Graph.AStar(start, destination, out goalList);
         if (!success)
             throw new Exception("couldn't find a solution for node");
@@ -53,15 +52,15 @@ public class Pedestrian : MonoBehaviour
 
         this.position = position;
         Vector3 direction = (currentGoal - position).normalized;
-        velocity = direction * walkingSpeed;
+        velocity = direction * maxWalkingSpeed;
 
         transform.position = position;
         transform.forward = direction;
-
-        avoidance = new Vector3();
-        following = new Vector3();
     }
 
+    /**
+     * <param name="deltaTime">in seconds</param>
+     */
     public void UpdateStatus(float deltaTime)
     {
         switch (state)
@@ -72,28 +71,8 @@ public class Pedestrian : MonoBehaviour
                 
             case PedestrianState.WALKING:
                 // F = m . a     when the mass is constant (1) F = a
-
-                //avoidance
-                // if (Physics.SphereCast(position, modelWidth, velocity.normalized, out RaycastHit hitInfo, viewRadius))
-                // {
-                //     avoidance = Vector3.right / 4;
-                //     avoidance = transform.TransformDirection(avoidance);
-                // } else
-                // {
-                //     avoidance = Vector3.zero;
-                // }
-                
                 //TODO: different path width
-                following = FollowPath(position, currentGoal, 10);
-                avoidance = AvoidObstacles();
-                steeringForces = following + avoidance;
-                steeringForces = Mathf.Min(steeringForces.magnitude, maxSteerForce) * steeringForces.normalized;
-                velocity += steeringForces * deltaTime;
-                velocity = velocity.normalized * walkingSpeed;
-                position += velocity * deltaTime;
-                
-                transform.position = position;
-                transform.forward = velocity.normalized;
+                MovePedestrian(Seek(currentGoal), deltaTime);
 
                 if (Vector3.Distance(position, currentGoal) < 1)
                 {
@@ -108,7 +87,6 @@ public class Pedestrian : MonoBehaviour
                 } else
                 {
                     currentGoal = goalList[++currentGoalIndex].position;
-                    velocity = (currentGoal - position).normalized * walkingSpeed;
                     state = PedestrianState.WALKING;
                 }
                 break;
@@ -119,14 +97,65 @@ public class Pedestrian : MonoBehaviour
         }
     }
 
+    public void MovePedestrian(Vector3 effectingForces, float deltaTime)
+    {
+        acceleration = Cap(effectingForces, maxSteerForce);
+        velocity += acceleration * deltaTime;
+        velocity = Cap(velocity, maxWalkingSpeed);
+        position += velocity * deltaTime;
+
+        transform.position = position;
+        transform.forward = velocity.normalized;
+    }
+
     /**
      * <returns>steering force required to follow the target</returns>
      */
     public Vector3 Seek(Vector3 target)
     {
-        Vector3 desiredVelocity = (position - target).normalized * walkingSpeed;
+        Vector3 desiredVelocity = (target - position).normalized * maxWalkingSpeed;
         return desiredVelocity - velocity;
     }
+
+    /**
+     * <returns>steering force required to follow the target and slow down when getting close</returns>>
+     */
+    public Vector3 Arrival(Vector3 target)
+    {
+        Vector3 targetRelativePosition = target - position;
+        float distance = targetRelativePosition.magnitude;
+        float rampedSpeed = maxWalkingSpeed * distance / slowingDownDistance;
+        float clippedSpeed = Mathf.Min(rampedSpeed, maxWalkingSpeed);
+        // divide relative position by the distance to get normalized vector in target direction
+        Vector3 desiredVelocity = targetRelativePosition / distance * clippedSpeed;
+        return desiredVelocity - velocity;
+    }
+
+    /**
+     * caps the vector to the specified length if it succeeds it
+     */
+    public Vector3 Cap(Vector3 vector, float maxLength)
+    {
+        if (vector.magnitude > maxLength)
+            vector = vector.normalized * maxLength;
+        return vector;
+    }
+
+    public float WalkingSpeed => velocity.magnitude;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     //TODO: include curved paths
     public Vector3 FollowPath(Vector3 pathStart, Vector3 pathEnd, float pathWidth)
@@ -148,7 +177,7 @@ public class Pedestrian : MonoBehaviour
         {
             if (hit.transform.TryGetComponent(out Pedestrian pedestrian))
             {
-                if (pedestrian.walkingSpeed < walkingSpeed)
+                if (pedestrian.WalkingSpeed < WalkingSpeed)
                 {
                     Vector3 hitPosition = transform.InverseTransformPoint(hit.point);
                     // steer in opposite direction 

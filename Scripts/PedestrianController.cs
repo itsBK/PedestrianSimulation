@@ -11,14 +11,18 @@ public class PedestrianController : MonoBehaviour
     public GameObject pedestrianModelPrefab;
     // TODO: change to Vector3 vehiclePosition
     public GameObject vehicle;
+    public Vector3 vehiclePosition;
     public List<Pedestrian> activePedestrians;
     public List<int> availableIDs;
     public int maxPedestriansCount = 40;
-    public float minWalkingSpeed = 1;
-    public float maxWalkingSpeed = 3;
-    public float maxSteerForce = 1;
+    public float minWalkingSpeed = 4;
+    public float maxWalkingSpeed = 6;
     public float viewRadius = 4;
     public float spawnRadius = 100;
+
+    // TODO: temporal
+    [Range(1, 10)]
+    public int speedUpTime = 1;
 
     private Transform _controllerTransform;
     // TODO: temporal
@@ -48,10 +52,10 @@ public class PedestrianController : MonoBehaviour
 
     private void Update()
     {
-        Vector3 vehiclePosition = vehicle.transform.position;
+        vehiclePosition = vehicle.transform.position;
         CheckForRemoval(vehiclePosition);
         CheckForSpawning(vehiclePosition);
-        float deltaTime = Time.deltaTime;
+        float deltaTime = Time.deltaTime * speedUpTime;
         foreach (Pedestrian pedestrian in activePedestrians)
         {
             pedestrian.UpdateStatus(deltaTime);
@@ -86,6 +90,12 @@ public class PedestrianController : MonoBehaviour
             // TODO: change to pedestrian.position
             if (Vector3.Distance(pedestrian.transform.position, vehiclePosition) > spawnRadius)
                 removalQueue.Add(pedestrian);
+            // TODO: remove later
+            else if (pedestrian.state == Pedestrian.PedestrianState.ARRIVED)
+            {
+                removalQueue.Add(pedestrian);
+                maxPedestriansCount--;
+            }
         }
         
         RemovePedestrians(removalQueue);
@@ -122,6 +132,7 @@ public class PedestrianController : MonoBehaviour
         availableIDs.RemoveAt(0);
         // TODO: find a procedural process with seed
         float walkingSpeed = (float) _random.NextDouble() * (maxWalkingSpeed - minWalkingSpeed) + minWalkingSpeed;
+        walkingSpeed = KmhToMs(walkingSpeed);
         
         // TODO: find a procedural process with seed
         // Random.Next() return a value less then maxValue ([0, maxValue[)
@@ -136,8 +147,16 @@ public class PedestrianController : MonoBehaviour
         pedestrianGO.transform.position = spawnPosition;
         
         Pedestrian pedestrian = pedestrianGO.AddComponent<Pedestrian>();
-        pedestrian.Setup(id, spawnPosition, graph.nodes[a], graph.nodes[b], walkingSpeed, maxSteerForce, viewRadius);
+        pedestrian.Setup(id, spawnPosition, graph.nodes[a], graph.nodes[b], walkingSpeed, viewRadius);
         
         activePedestrians.Add(pedestrian);
+    }
+
+    /**
+     * convert the speed from km/h to m/s
+     */
+    private float KmhToMs(float speed)
+    {
+        return speed / 3.6f;
     }
 }
