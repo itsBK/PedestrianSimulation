@@ -17,7 +17,7 @@ public class PedestrianController : MonoBehaviour
     public int maxPedestriansCount = 40;
     public float minWalkingSpeed = 4;
     public float maxWalkingSpeed = 6;
-    public float viewRadius = 4;
+    public float viewRadius = 10;
     public float spawnRadius = 100;
 
     // TODO: temporal
@@ -53,8 +53,8 @@ public class PedestrianController : MonoBehaviour
     private void Update()
     {
         vehiclePosition = vehicle.transform.position;
-        CheckForRemoval(vehiclePosition);
-        CheckForSpawning(vehiclePosition);
+        CheckForRemoval();
+        CheckForSpawning();
         float deltaTime = Time.deltaTime * speedUpTime;
         foreach (Pedestrian pedestrian in activePedestrians)
         {
@@ -65,7 +65,7 @@ public class PedestrianController : MonoBehaviour
     /**
      * checks and eventually spawn one pedestrian per frame to limit frame delays
      */
-    private void CheckForSpawning(Vector3 vehiclePosition)
+    private void CheckForSpawning()
     {
         if (activePedestrians.Count < maxPedestriansCount)
         {
@@ -82,7 +82,7 @@ public class PedestrianController : MonoBehaviour
     /**
      * add all pedestrians out of range in a queue to be removed
      */
-    private void CheckForRemoval(Vector3 vehiclePosition)
+    private void CheckForRemoval()
     {
         List<Pedestrian> removalQueue = new List<Pedestrian>();
         foreach (Pedestrian pedestrian in activePedestrians)

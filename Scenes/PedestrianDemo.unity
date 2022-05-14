@@ -611,7 +611,7 @@ MonoBehaviour:
   minWalkingSpeed: 4
   maxWalkingSpeed: 6
   viewRadius: 10
-  spawnRadius: 75
+  spawnRadius: 100
   speedUpTime: 1
 --- !u!4 &1205133707
 Transform:

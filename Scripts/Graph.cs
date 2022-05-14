@@ -6,6 +6,9 @@ using Vector3 = UnityEngine.Vector3;
 public class Graph
 {
     
+    /**
+     * To use in A-Star pathfinding algorithm
+     */
     public struct NodeCost
     {
         public Node predecessor;
@@ -19,8 +22,6 @@ public class Graph
 
     public Graph()
     {
-        nodes = new List<Node>();
-        edges = new List<Edge>();
         Setup();
     }
     
@@ -123,14 +124,15 @@ public class Graph
     {
         int id = 0;
         foreach (Node node in nodes)
-        {
             id = node.id > id ? node.id : id;
-        }
 
         return id;
     }
 
-    public static bool AStar(Node start, Node end, out List<Node> result) {
+    /**
+     * implementation of A-Star algorithm
+     */
+    public static bool FindPath(Node start, Node end, out List<Node> result) {
         result = new List<Node>();
         Dictionary<Node, NodeCost> allNodes = new Dictionary<Node, NodeCost>();
         Dictionary<Node, NodeCost> unvisited = new Dictionary<Node, NodeCost>();

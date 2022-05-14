@@ -19,16 +19,15 @@ public class Pedestrian : MonoBehaviour
     public int id;
     public PedestrianState state = PedestrianState.IDLE;
     public List<Node> goalList;
-    public Vector3 currentGoal;
+    public Node currentGoal;
     public int currentGoalIndex;
     public int finalGoalIndex;
     
     public float maxSteerForce = 1;
     public float maxWalkingSpeed;
-    public float slowingDownDistance = 10;
     public float viewRadius;
     //TODO: automatize this
-    public float modelWidth = 0.8f;
+    public float modelWidth = 0.5f;
 
     public Vector3 position;
     public Vector3 velocity;
@@ -42,16 +41,16 @@ public class Pedestrian : MonoBehaviour
         this.maxWalkingSpeed = maxWalkingSpeed;
         this.viewRadius = viewRadius;
         
-        bool success = Graph.AStar(start, destination, out goalList);
+        bool success = Graph.FindPath(start, destination, out goalList);
         if (!success)
             throw new Exception("couldn't find a solution for node");
         
-        currentGoal = start.position;
+        currentGoal = start;
         currentGoalIndex = 0;
         finalGoalIndex = goalList.Count - 1;
 
         this.position = position;
-        Vector3 direction = (currentGoal - position).normalized;
+        Vector3 direction = (currentGoal.position - position).normalized;
         velocity = direction * maxWalkingSpeed;
 
         transform.position = position;
@@ -72,9 +71,9 @@ public class Pedestrian : MonoBehaviour
             case PedestrianState.WALKING:
                 // F = m . a     when the mass is constant (1) F = a
                 //TODO: different path width
-                MovePedestrian(Seek(currentGoal), deltaTime);
+                MovePedestrian(Arrival(currentGoal), deltaTime);
 
-                if (Vector3.Distance(position, currentGoal) < 1)
+                if (Vector3.Distance(position, currentGoal.position) < 1)
                 {
                     state = PedestrianState.WAITING;
                 }
@@ -86,7 +85,7 @@ public class Pedestrian : MonoBehaviour
                     state = PedestrianState.ARRIVED;
                 } else
                 {
-                    currentGoal = goalList[++currentGoalIndex].position;
+                    currentGoal = goalList[++currentGoalIndex];
                     state = PedestrianState.WALKING;
                 }
                 break;
@@ -111,6 +110,15 @@ public class Pedestrian : MonoBehaviour
     /**
      * <returns>steering force required to follow the target</returns>
      */
+    public Vector3 Seek(Node target)
+    {
+        Vector3 desiredVelocity = (target.position - position).normalized * maxWalkingSpeed;
+        return desiredVelocity - velocity;
+    }
+    
+    /**
+     * <returns>steering force required to follow the target</returns>
+     */
     public Vector3 Seek(Vector3 target)
     {
         Vector3 desiredVelocity = (target - position).normalized * maxWalkingSpeed;
@@ -120,11 +128,11 @@ public class Pedestrian : MonoBehaviour
     /**
      * <returns>steering force required to follow the target and slow down when getting close</returns>>
      */
-    public Vector3 Arrival(Vector3 target)
+    public Vector3 Arrival(Node target)
     {
-        Vector3 targetRelativePosition = target - position;
+        Vector3 targetRelativePosition = target.position - position;
         float distance = targetRelativePosition.magnitude;
-        float rampedSpeed = maxWalkingSpeed * distance / slowingDownDistance;
+        float rampedSpeed = maxWalkingSpeed * distance / target.radius;
         float clippedSpeed = Mathf.Min(rampedSpeed, maxWalkingSpeed);
         // divide relative position by the distance to get normalized vector in target direction
         Vector3 desiredVelocity = targetRelativePosition / distance * clippedSpeed;
@@ -169,6 +177,25 @@ public class Pedestrian : MonoBehaviour
         }
 
         return Vector3.zero;
+    }
+
+    //TODO: for testing. change to collision avoidance model later
+    public void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.blue;
+        Gizmos.DrawSphere(position + velocity.normalized * viewRadius / 2, viewRadius / 2);
+        Collider[] colliders = Physics.OverlapSphere(position + velocity.normalized * viewRadius / 2, viewRadius / 2);
+        foreach (Collider collider1 in colliders)
+        {
+            
+            if (collider1.transform.TryGetComponent(out Pedestrian pedestrian1))
+            {
+                if (this.id == pedestrian1.id)
+                    continue;
+                Gizmos.color = Color.green;
+                Gizmos.DrawSphere(pedestrian1.position, 2);
+            }
+        }
     }
 
     public Vector3 AvoidObstacles()
