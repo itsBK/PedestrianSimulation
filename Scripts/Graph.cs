@@ -26,12 +26,12 @@ public class Graph
     
     public void Setup()
     {
-        (Vector3, float)[] nodes = {
-            (new Vector3(10, 0, 90), 5),
-            (new Vector3(50, 0, 90), 5),
-            (new Vector3(90, 0, 50), 5),
-            (new Vector3(50, 0, 10), 5),
-            (new Vector3(10, 0, 10), 5),
+        Node[] nodes = {
+            new Node( 0, new Vector3(10, 0, 90), 5),
+            new Node( 1, new Vector3(50, 0, 90), 5),
+            new Node( 2, new Vector3(90, 0, 50), 5),
+            new Node( 3, new Vector3(50, 0, 10), 5),
+            new Node( 4, new Vector3(10, 0, 10), 5)
         };
 
         Edge[] edges = {
@@ -39,7 +39,7 @@ public class Graph
             Edge.StraightEdge(1, 500),
             Edge.StraightEdge(2,  20),
             Edge.StraightEdge(3, 700),
-            Edge.StraightEdge(4,  10),
+            Edge.StraightEdge(4,  10)
         };
         
         int[,] adjMatrix = {
@@ -53,30 +53,26 @@ public class Graph
     }
 
     /**
-     * <param name="adjacencyMatrix">0 value represent no connection between the nodes</param>
+     * <param name="adjacencyMatrix">-1 value represent no connection between the nodes</param>
      */
-    public void SetGraphFrom((Vector3, float)[] nodes, Edge[] edges, int[,] adjacencyMatrix)
+    public void SetGraphFrom(Node[] nodes, Edge[] edges, int[,] adjacencyMatrix)
     {
-        int dimension = nodes.Length;
-        for (int i = 0; i < dimension; i++)
-        {
-            (Vector3, float) node = nodes[i];
-            this.nodes.Add(new Node(i, node.Item1, node.Item2));
-        }
+        this.nodes = nodes.ToList();
         this.edges = edges.ToList();
         
+        int dimension = nodes.Length;
         for (int x = 0; x < dimension; x++)
         {
-            Node node = GetNodeByID(x);
+            Node node = GetNodeById(x);
             for (int y = 0; y < dimension; y++)
             {
                 if (adjacencyMatrix[x, y] >= 0)
-                    node.AddDirectedEdge(GetNodeByID(y), GetEdgeByID(adjacencyMatrix[x, y]));
+                    node.AddDirectedEdge(GetNodeById(y), GetEdgeById(adjacencyMatrix[x, y]));
             }
         }
     }
 
-    public Node GetNodeByID(int id)
+    public Node GetNodeById(int id)
     {
         foreach (Node node in nodes)
             if (node.id == id)
@@ -85,7 +81,7 @@ public class Graph
         throw new KeyNotFoundException("the node(id=" + id + ") could not be found in list of nodes");
     }
 
-    public Edge GetEdgeByID(int id)
+    public Edge GetEdgeById(int id)
     {
         foreach (Edge edge in edges)
             if (edge.id == id)
@@ -94,14 +90,8 @@ public class Graph
         throw new KeyNotFoundException("the edge(id=" + id + ") could not be found in list of edges");
     }
 
-    public (Vector3, float)[] GetNodesAsVectors()
+    public Node[] GetNodes()
     {
-        List<(Vector3, float)> nodes = new List<(Vector3, float)>();
-        foreach (Node node in this.nodes)
-        {
-            nodes.Add((node.position, node.radius));
-        }
-
         return nodes.ToArray();
     }
 
@@ -112,10 +102,10 @@ public class Graph
 
     public int[,] GetAdjacencyMatrix()
     {
-        int size = GetHighestID();
+        int size = GetHighestId();
         int[,] adjacencyMatrix = new int[size, size];
-        for (int x = 0; x < adjacencyMatrix.GetLength(0); x++)
-            for (int y = 0; y < adjacencyMatrix.GetLength(1); y++)
+        for (int x = 0; x < size; x++)
+            for (int y = 0; y < size; y++)
                 adjacencyMatrix[x, y] = -1;
 
         foreach (Node node in nodes)
@@ -129,7 +119,7 @@ public class Graph
         return adjacencyMatrix;
     }
 
-    private int GetHighestID()
+    private int GetHighestId()
     {
         int id = 0;
         foreach (Node node in nodes)
