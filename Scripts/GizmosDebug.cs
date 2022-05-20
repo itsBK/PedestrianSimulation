@@ -12,8 +12,8 @@ public class GizmosDebug : MonoBehaviour
         
         foreach (Node node in controller.graph.nodes)
         {
-            Gizmos.color = Color.red;
-            Gizmos.DrawSphere(node.position, 1);
+            Handles.color = Color.red;
+            Handles.DrawWireDisc(node.position, Vector3.up, node.radius);
             foreach (Node neighbor in node.neighbors.Keys)
             {
                 Gizmos.DrawLine(node.position, neighbor.position);
@@ -26,6 +26,10 @@ public class GizmosDebug : MonoBehaviour
             Gizmos.DrawRay(pedestrian.position, pedestrian.velocity);
             Gizmos.color = Color.red;
             Gizmos.DrawRay(pedestrian.position, pedestrian.acceleration);
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawRay(pedestrian.position, pedestrian.avoidance);
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawRay(pedestrian.position, pedestrian.seek);
         }
     }
 

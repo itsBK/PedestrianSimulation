@@ -36,11 +36,11 @@ public class Graph
         };
 
         Edge[] edges = {
-            Edge.StraightEdge(0, 300),
-            Edge.StraightEdge(1, 500),
-            Edge.StraightEdge(2,  20),
-            Edge.StraightEdge(3, 700),
-            Edge.StraightEdge(4,  10)
+            Edge.StraightEdge(0, 300, 5),
+            Edge.StraightEdge(1, 500, 5),
+            Edge.StraightEdge(2,  20, 5),
+            Edge.StraightEdge(3, 700, 5),
+            Edge.StraightEdge(4,  10, 5)
         };
         
         int[,] adjMatrix = {

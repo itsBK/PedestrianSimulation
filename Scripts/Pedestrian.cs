@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
 
 public class Pedestrian : MonoBehaviour
@@ -19,6 +20,7 @@ public class Pedestrian : MonoBehaviour
     public int id;
     public PedestrianState state = PedestrianState.IDLE;
     public List<Node> goalList;
+    public Node lastGoal;
     public Node currentGoal;
     public int currentGoalIndex;
     public int finalGoalIndex;
@@ -32,6 +34,9 @@ public class Pedestrian : MonoBehaviour
     public Vector3 position;
     public Vector3 velocity;
     public Vector3 acceleration;
+    
+    public Vector3 avoidance;
+    public Vector3 seek;
 
 
     public void Setup(int id, Vector3 position, Node start, Node destination, float maxWalkingSpeed, float viewRadius)
@@ -43,8 +48,10 @@ public class Pedestrian : MonoBehaviour
         
         bool success = Graph.FindPath(start, destination, out goalList);
         if (!success)
-            throw new Exception("couldn't find a solution for node");
+            throw new Exception("couldn't find a path between node(" + start.id + ")"
+                                                             + " and node(" + destination.id + ")");
         
+        lastGoal = null;
         currentGoal = start;
         currentGoalIndex = 0;
         finalGoalIndex = goalList.Count - 1;
@@ -69,11 +76,13 @@ public class Pedestrian : MonoBehaviour
                 break;
                 
             case PedestrianState.WALKING:
-                // F = m . a     when the mass is constant (1) F = a
                 //TODO: different path width
-                MovePedestrian(Arrival(currentGoal), deltaTime);
+                seek = SeekWithOffset(currentGoal);
+                avoidance = AvoidCollision();
+                Vector3 effectingForces = seek + avoidance;
+                MovePedestrian(effectingForces, deltaTime);
 
-                if (Vector3.Distance(position, currentGoal.position) < 1)
+                if (Vector3.Distance(position, currentGoal.position) < currentGoal.radius)
                 {
                     state = PedestrianState.WAITING;
                 }
@@ -85,6 +94,7 @@ public class Pedestrian : MonoBehaviour
                     state = PedestrianState.ARRIVED;
                 } else
                 {
+                    lastGoal = currentGoal;
                     currentGoal = goalList[++currentGoalIndex];
                     state = PedestrianState.WALKING;
                 }
@@ -98,9 +108,9 @@ public class Pedestrian : MonoBehaviour
 
     public void MovePedestrian(Vector3 effectingForces, float deltaTime)
     {
-        acceleration = Cap(effectingForces, maxSteerForce);
+        acceleration = Clamp(effectingForces, maxSteerForce);
         velocity += acceleration * deltaTime;
-        velocity = Cap(velocity, maxWalkingSpeed);
+        velocity = Clamp(velocity, maxWalkingSpeed);
         position += velocity * deltaTime;
 
         transform.position = position;
@@ -124,6 +134,24 @@ public class Pedestrian : MonoBehaviour
         Vector3 desiredVelocity = (target - position).normalized * maxWalkingSpeed;
         return desiredVelocity - velocity;
     }
+    
+    
+
+    /**
+     * <returns>steering force required to follow the target</returns>
+     */
+    public Vector3 SeekWithOffset(Node target)
+    {
+        float radius = target.radius;
+        Vector3 ahead = position + velocity;
+        Vector3 projTargetOnAhead = (Vector3.Dot(target.position, ahead) / ahead.magnitude) * ahead;
+        if (Vector3.Distance(ahead, projTargetOnAhead) > radius)
+        {
+            Vector3 desiredVelocity = (target.position - position).normalized * maxWalkingSpeed;
+            return desiredVelocity - velocity;
+        }
+        return Vector3.zero;
+    }
 
     /**
      * <returns>steering force required to follow the target and slow down when getting close</returns>>
@@ -140,9 +168,9 @@ public class Pedestrian : MonoBehaviour
     }
 
     /**
-     * caps the vector to the specified length if it succeeds it
+     * clamp the vector to the specified length if it succeeds it
      */
-    public Vector3 Cap(Vector3 vector, float maxLength)
+    public Vector3 Clamp(Vector3 vector, float maxLength)
     {
         if (vector.magnitude > maxLength)
             vector = vector.normalized * maxLength;
@@ -178,23 +206,61 @@ public class Pedestrian : MonoBehaviour
 
         return Vector3.zero;
     }
+    
+    public Vector3 FollowPath(Node pathStart, Node pathEnd, float pathWidth)
+    {
+        Vector3 pathStartVec = pathStart.position;
+        Vector3 pathEndVec = pathEnd.position;
+        Vector3 ahead = position + velocity;
+        if (HandleUtility.DistancePointLine(ahead, pathStartVec, pathEndVec) > pathWidth / 2)
+        {
+            // same as Vector3.Dot(pathEnd - pathStart, ahead) * (pathEnd - pathStart);
+            Vector3 projAheadOnPath = HandleUtility.ProjectPointLine(ahead, pathStartVec, pathEndVec);
+            return Seek(projAheadOnPath);
+        }
+
+        return Vector3.zero;
+    }
+
+    public Vector3 AvoidCollision()
+    {
+        Vector3 direction = velocity.normalized;
+        Ray ray = new Ray(position, direction);
+        
+        int i = 0;
+        bool hit = true;
+        while (hit && i < 40)
+        {
+            ray = new Ray(position, GetDirection(direction, i));
+            hit = Physics.SphereCast(ray, modelWidth / 2, viewRadius);
+            i++;
+        }
+
+        return Seek(ray.origin + ray.direction * velocity.magnitude);
+    }
+
+    public Vector3 GetDirection(Vector3 direction, int i)
+    {
+        // alternating angles: i = 0,  1,  2,   3,   4,   5,   6
+        // angle results:        = 0, -5,  5, -10,  10, -15,  15
+        int sign = -1 ^ i;
+        int angle = (i + 1) / 2 * 5;
+        return Quaternion.AngleAxis(sign * angle, Vector3.up) * direction;
+    }
 
     //TODO: for testing. change to collision avoidance model later
     public void OnDrawGizmosSelected()
     {
-        Gizmos.color = Color.blue;
-        Gizmos.DrawSphere(position + velocity.normalized * viewRadius / 2, viewRadius / 2);
-        Collider[] colliders = Physics.OverlapSphere(position + velocity.normalized * viewRadius / 2, viewRadius / 2);
-        foreach (Collider collider1 in colliders)
+        Vector3 direction = velocity.normalized;
+
+        Gizmos.color = Color.green;
+        Gizmos.DrawSphere(position, modelWidth / 2);
+        bool hit = Physics.SphereCast(position, modelWidth / 2, direction, out RaycastHit hitInfo, viewRadius);
+        
+        if (hit)
         {
-            
-            if (collider1.transform.TryGetComponent(out Pedestrian pedestrian1))
-            {
-                if (this.id == pedestrian1.id)
-                    continue;
-                Gizmos.color = Color.green;
-                Gizmos.DrawSphere(pedestrian1.position, 2);
-            }
+            Gizmos.color = Color.red;
+            Gizmos.DrawSphere(hitInfo.point, modelWidth / 2);
         }
     }
 

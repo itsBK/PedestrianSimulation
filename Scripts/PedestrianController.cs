@@ -29,13 +29,6 @@ public class PedestrianController : MonoBehaviour
     private Random _random;
 
     
-    // TODO: for testing. can be removed later
-    private void Awake()
-    {
-        QualitySettings.vSyncCount = 0;         // no vSync
-        Application.targetFrameRate = 10;
-    }
-
     private void Start()
     {
         graph = new Graph();
@@ -87,8 +80,7 @@ public class PedestrianController : MonoBehaviour
         List<Pedestrian> removalQueue = new List<Pedestrian>();
         foreach (Pedestrian pedestrian in activePedestrians)
         {
-            // TODO: change to pedestrian.position
-            if (Vector3.Distance(pedestrian.transform.position, vehiclePosition) > spawnRadius)
+            if (Vector3.Distance(pedestrian.position, vehiclePosition) > spawnRadius)
                 removalQueue.Add(pedestrian);
             // TODO: remove later
             else if (pedestrian.state == Pedestrian.PedestrianState.ARRIVED)
@@ -136,8 +128,8 @@ public class PedestrianController : MonoBehaviour
         
         // TODO: find a procedural process with seed
         // Random.Next() return a value less then maxValue ([0, maxValue[)
-        int a = _random.Next(nodeCount);
-        int b = a;
+        int a = 0;
+        int b = 1;
         while (b == a)
             b = _random.Next(nodeCount);
 
