@@ -24,11 +24,11 @@ public class GizmosDebug : MonoBehaviour
         {
             Gizmos.color = Color.green;
             Gizmos.DrawRay(pedestrian.position, pedestrian.velocity);
-            Gizmos.color = Color.red;
-            Gizmos.DrawRay(pedestrian.position, pedestrian.acceleration);
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawRay(pedestrian.position, pedestrian.avoidance);
             Gizmos.color = Color.cyan;
+            Gizmos.DrawRay(pedestrian.position, pedestrian.acceleration);
+            Gizmos.color = Color.red;
+            Gizmos.DrawRay(pedestrian.position, pedestrian.avoidance);
+            Gizmos.color = Color.yellow;
             Gizmos.DrawRay(pedestrian.position, pedestrian.seek);
         }
     }

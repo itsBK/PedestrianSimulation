@@ -11,7 +11,8 @@ public class Pedestrian : MonoBehaviour
     public enum PedestrianState {
         IDLE,
         WALKING,
-        WAITING,
+        AVOIDING_COLLISION,
+        REDUCING_SPEED,
         ARRIVED
     }
 
@@ -22,12 +23,15 @@ public class Pedestrian : MonoBehaviour
     public List<Node> goalList;
     public Node lastGoal;
     public Node currentGoal;
+    public Edge currentEdge;
     public int currentGoalIndex;
     public int finalGoalIndex;
     
     public float maxSteerForce = 1;
     public float maxWalkingSpeed;
+    public float minSlowDownSpeed = 0.1f;
     public float viewRadius;
+    public float safeZone = 2;
     //TODO: automatize this
     public float modelWidth = 0.5f;
 
@@ -39,28 +43,30 @@ public class Pedestrian : MonoBehaviour
     public Vector3 seek;
 
 
-    public void Setup(int id, Vector3 position, Node start, Node destination, float maxWalkingSpeed, float viewRadius)
+    public void Setup(int id, Vector3 spawnPosition, Node start, Node destination, float maxWalkingSpeed, float viewRadius)
     {
         _controller = transform.parent.GetComponent<PedestrianController>();
         this.id = id;
         this.maxWalkingSpeed = maxWalkingSpeed;
         this.viewRadius = viewRadius;
+        state = PedestrianState.WALKING;
         
         bool success = Graph.FindPath(start, destination, out goalList);
         if (!success)
             throw new Exception("couldn't find a path between node(" + start.id + ")"
                                                              + " and node(" + destination.id + ")");
         
-        lastGoal = null;
-        currentGoal = start;
-        currentGoalIndex = 0;
+        lastGoal = start;
+        currentGoal = goalList[1];
+        currentEdge = lastGoal.GetEdgeByNeighbor(currentGoal);
+        currentGoalIndex = 1;
         finalGoalIndex = goalList.Count - 1;
 
-        this.position = position;
-        Vector3 direction = (currentGoal.position - position).normalized;
+        this.position = spawnPosition;
+        Vector3 direction = (currentGoal.position - spawnPosition).normalized;
         velocity = direction * maxWalkingSpeed;
 
-        transform.position = position;
+        transform.position = spawnPosition;
         transform.forward = direction;
     }
 
@@ -69,46 +75,66 @@ public class Pedestrian : MonoBehaviour
      */
     public void UpdateStatus(float deltaTime)
     {
+        Vector3 effectingForce;
         switch (state)
         {
             case PedestrianState.IDLE:
-                state = PedestrianState.WALKING;
-                break;
-                
+                return;
+            
             case PedestrianState.WALKING:
                 //TODO: different path width
+                //TODO: switch to follow path
                 seek = SeekWithOffset(currentGoal);
-                avoidance = AvoidCollision();
-                Vector3 effectingForces = seek + avoidance;
-                MovePedestrian(effectingForces, deltaTime);
-
-                if (Vector3.Distance(position, currentGoal.position) < currentGoal.radius)
-                {
-                    state = PedestrianState.WAITING;
-                }
+                effectingForce = seek;
                 break;
-                
-            case PedestrianState.WAITING:
-                if (currentGoalIndex == finalGoalIndex)
-                {
-                    state = PedestrianState.ARRIVED;
-                } else
-                {
-                    lastGoal = currentGoal;
-                    currentGoal = goalList[++currentGoalIndex];
-                    state = PedestrianState.WALKING;
-                }
+            
+            case PedestrianState.AVOIDING_COLLISION:
+                avoidance = AvoidCollision();
+                effectingForce = avoidance;
+                break;
+            
+            case PedestrianState.REDUCING_SPEED:
+                effectingForce = ReduceSpeed();
                 break;
             
             case PedestrianState.ARRIVED:
                 Debug.Log("pedestrian has reached their destination");
-                break;
+                return;
+            
+            default:
+                throw new ArgumentOutOfRangeException("reached an unreachable PedestrianState");
+        }
+
+        MovePedestrian(effectingForce, deltaTime);
+
+        // check if current goal is reached
+        if (Vector3.Distance(position, currentGoal.position) < currentGoal.radius)
+        {
+            if (currentGoalIndex == finalGoalIndex)
+            {
+                state = PedestrianState.ARRIVED;
+            } else
+            {
+                lastGoal = currentGoal;
+                currentGoal = goalList[++currentGoalIndex];
+                currentEdge = lastGoal.GetEdgeByNeighbor(currentGoal);
+                state = PedestrianState.WALKING;
+            }
+        }
+
+        if (CheckCollisionAhead(out float distance))
+        {
+            state = distance <= safeZone ?
+                PedestrianState.REDUCING_SPEED : PedestrianState.AVOIDING_COLLISION;
+        } else
+        {
+            state = PedestrianState.WALKING;
         }
     }
 
-    public void MovePedestrian(Vector3 effectingForces, float deltaTime)
+    public void MovePedestrian(Vector3 effectingForce, float deltaTime)
     {
-        acceleration = Clamp(effectingForces, maxSteerForce);
+        acceleration = Clamp(effectingForce, maxSteerForce);
         velocity += acceleration * deltaTime;
         velocity = Clamp(velocity, maxWalkingSpeed);
         position += velocity * deltaTime;
@@ -222,12 +248,20 @@ public class Pedestrian : MonoBehaviour
         return Vector3.zero;
     }
 
+    public bool CheckCollisionAhead(out float distance)
+    {
+        bool result = Physics.SphereCast(new Ray(position, velocity.normalized),
+            modelWidth / 2, out RaycastHit hitInfo, viewRadius);
+        distance = hitInfo.distance;
+        return result;
+    }
+
     public Vector3 AvoidCollision()
     {
         Vector3 direction = velocity.normalized;
-        Ray ray = new Ray(position, direction);
+        Ray ray = new Ray();
         
-        int i = 0;
+        int i = 1;
         bool hit = true;
         while (hit && i < 40)
         {
@@ -239,10 +273,15 @@ public class Pedestrian : MonoBehaviour
         return Seek(ray.origin + ray.direction * velocity.magnitude);
     }
 
+    public Vector3 ReduceSpeed()
+    {
+        return velocity.magnitude > minSlowDownSpeed? -velocity : Vector3.zero;
+    }
+
     public Vector3 GetDirection(Vector3 direction, int i)
     {
-        // alternating angles: i = 0,  1,  2,   3,   4,   5,   6
-        // angle results:        = 0, -5,  5, -10,  10, -15,  15
+        // input:      i = 0,  1,  2,   3,   4,   5,   6
+        // output: angle = 0, -5,  5, -10,  10, -15,  15
         int sign = -1 ^ i;
         int angle = (i + 1) / 2 * 5;
         return Quaternion.AngleAxis(sign * angle, Vector3.up) * direction;

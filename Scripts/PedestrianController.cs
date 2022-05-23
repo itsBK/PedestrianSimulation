@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Random = System.Random;
@@ -46,13 +47,13 @@ public class PedestrianController : MonoBehaviour
     private void Update()
     {
         vehiclePosition = vehicle.transform.position;
-        CheckForRemoval();
         CheckForSpawning();
         float deltaTime = Time.deltaTime * speedUpTime;
         foreach (Pedestrian pedestrian in activePedestrians)
         {
             pedestrian.UpdateStatus(deltaTime);
         }
+        CheckForRemoval();
     }
 
     /**
@@ -62,13 +63,13 @@ public class PedestrianController : MonoBehaviour
     {
         if (activePedestrians.Count < maxPedestriansCount)
         {
-            // TODO: find a procedural process with seed for spawning
-            Vector3 position = new Vector3 {
-                x = ((float) _random.NextDouble() * 2 - 1) * spawnRadius,
-                z = ((float) _random.NextDouble() * 2 - 1) * spawnRadius
-            };
-            position += vehiclePosition;
-            SpawnPedestrian(position);
+            // TODO: change spawn process. spawn outside of car field of view
+            Node[] nearbyNodes = NearbyNodes(vehiclePosition, spawnRadius);
+            if (nearbyNodes.Length == 0)
+                throw new ArgumentNullException("no nearby nodes found to spawn pedestrians");
+            // TODO: spawn in invisible locations
+            Node spawnNode = nearbyNodes[_random.Next(nearbyNodes.Length)];
+            SpawnPedestrian(spawnNode);
         }
     }
 
@@ -118,30 +119,46 @@ public class PedestrianController : MonoBehaviour
         return false;
     }
     
-    private void SpawnPedestrian(Vector3 spawnPosition)
+    private void SpawnPedestrian(Node spawnNode)
     {
         int id = availableIDs[0];
         availableIDs.RemoveAt(0);
-        // TODO: find a procedural process with seed
         float walkingSpeed = (float) _random.NextDouble() * (maxWalkingSpeed - minWalkingSpeed) + minWalkingSpeed;
         walkingSpeed = KmhToMs(walkingSpeed);
-        
-        // TODO: find a procedural process with seed
-        // Random.Next() return a value less then maxValue ([0, maxValue[)
-        int a = 0;
-        int b = 1;
-        while (b == a)
-            b = _random.Next(nodeCount);
+
+        int b;
+        do { b = _random.Next(nodeCount); }
+        while (graph.nodes[b] == spawnNode);
 
         GameObject pedestrianGO = Instantiate(pedestrianModelPrefab, _controllerTransform);
         pedestrianGO.transform.name = "Pedestrian " + id;
-        // TODO: change to pedestrian.position;
-        pedestrianGO.transform.position = spawnPosition;
         
+        Vector2 randomPosition = UnityEngine.Random.insideUnitCircle * spawnNode.radius;
+        Vector3 spawnPosition = new Vector3 {
+            x = randomPosition.x,
+            z = randomPosition.y
+        };
+        spawnPosition += spawnNode.position;
+
         Pedestrian pedestrian = pedestrianGO.AddComponent<Pedestrian>();
-        pedestrian.Setup(id, spawnPosition, graph.nodes[a], graph.nodes[b], walkingSpeed, viewRadius);
+        pedestrian.Setup(id, spawnPosition, spawnNode, graph.nodes[b], walkingSpeed, viewRadius);
         
         activePedestrians.Add(pedestrian);
+    }
+
+    // TODO: change spawn process. include edges too
+    private Node[] NearbyNodes(Vector3 center, float radius)
+    {
+        List<Node> nearbyNodes = new List<Node>();
+        foreach (Node node in graph.nodes)
+        {
+            if (Vector3.Distance(node.position, center) <= radius)
+            {
+                nearbyNodes.Add(node);
+            }
+        }
+
+        return nearbyNodes.ToArray();
     }
 
     /**
