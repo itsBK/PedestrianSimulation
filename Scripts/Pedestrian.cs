@@ -43,7 +43,7 @@ public class Pedestrian : MonoBehaviour
     public Vector3 seek;
 
 
-    public void Setup(int id, Vector3 spawnPosition, Node start, Node destination, float maxWalkingSpeed, float viewRadius)
+    public void Setup(int id, Vector3 spawnPosition, out List<Node> goalList, float maxWalkingSpeed, float viewRadius)
     {
         _controller = transform.parent.GetComponent<PedestrianController>();
         this.id = id;
@@ -51,12 +51,7 @@ public class Pedestrian : MonoBehaviour
         this.viewRadius = viewRadius;
         state = PedestrianState.WALKING;
         
-        bool success = Graph.FindPath(start, destination, out goalList);
-        if (!success)
-            throw new Exception("couldn't find a path between node(" + start.id + ")"
-                                                             + " and node(" + destination.id + ")");
-        
-        lastGoal = start;
+        lastGoal = goalList[0];
         currentGoal = goalList[1];
         currentEdge = lastGoal.GetEdgeByNeighbor(currentGoal);
         currentGoalIndex = 1;
@@ -287,7 +282,7 @@ public class Pedestrian : MonoBehaviour
         return Quaternion.AngleAxis(sign * angle, Vector3.up) * direction;
     }
 
-    //TODO: for testing. change to collision avoidance model later
+    //TODO: temporal for testing.
     public void OnDrawGizmosSelected()
     {
         Vector3 direction = velocity.normalized;
