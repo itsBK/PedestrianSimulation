@@ -26,10 +26,24 @@ public class GizmosDebug : MonoBehaviour
             Gizmos.DrawRay(pedestrian.position, pedestrian.velocity);
             Gizmos.color = Color.cyan;
             Gizmos.DrawRay(pedestrian.position, pedestrian.acceleration);
+            Handles.color = Color.blue;
+            Handles.DrawWireDisc(pedestrian.position, Vector3.up, pedestrian.viewRadius);
+            Handles.color = Color.red;
+            Handles.DrawWireDisc(pedestrian.position, Vector3.up, pedestrian.safeZone);
+            
+            Vector3 direction = pedestrian.velocity.normalized;
             Gizmos.color = Color.red;
-            Gizmos.DrawRay(pedestrian.position, pedestrian.avoidance);
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawRay(pedestrian.position, pedestrian.seek);
+            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.safeZone, 11));
+            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.safeZone, 12));
+            Gizmos.color = Color.blue;
+            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.viewRadius, 35));
+            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.viewRadius, 36));
+            Gizmos.color = Color.green;
+            Gizmos.DrawLine(pedestrian.position, pedestrian.currentGoal.position);
+            // Gizmos.color = Color.red;
+            // Gizmos.DrawRay(pedestrian.position, pedestrian.avoidance);
+            // Gizmos.color = Color.yellow;
+            // Gizmos.DrawRay(pedestrian.position, pedestrian.seek);direction
         }
     }
 

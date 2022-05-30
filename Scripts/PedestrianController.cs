@@ -17,14 +17,14 @@ public class PedestrianController : MonoBehaviour
     public int maxPedestriansCount = 40;
     public float minWalkingSpeed = 4;
     public float maxWalkingSpeed = 6;
-    public float viewRadius = 10;
+    public float viewRadius = 5;
     public float spawnRadius = 100;
+    public float spawnArea = 2;
 
     // TODO: temporal
     [Range(1, 10)]
     public int speedUpTime = 1;
 
-    private Transform _controllerTransform;
     // TODO: temporal
     private Random _random;
 
@@ -35,7 +35,6 @@ public class PedestrianController : MonoBehaviour
         _random = new Random();
         nodeCount = graph.nodes.Count;
         
-        _controllerTransform = transform;
         activePedestrians = new List<Pedestrian>(maxPedestriansCount);
         availableIDs = new List<int>();
         
@@ -63,20 +62,11 @@ public class PedestrianController : MonoBehaviour
         if (activePedestrians.Count < maxPedestriansCount)
         {
             // TODO: change spawn process. spawn outside of car field of view
-            Node nearbyNode = GetRandomNearbyNode(vehiclePosition, spawnRadius);
-            if (nearbyNode == null)
+            Node pathStart = GetRandomNearbyNode(vehiclePosition, spawnRadius);
+            if (pathStart == null)
                 throw new ArgumentNullException("no nearby nodes found to spawn pedestrians");
 
-            int b;
-            do { b = _random.Next(nodeCount); }
-            while (graph.nodes[b] == nearbyNode);
-
-            bool success = Graph.FindPath(nearbyNode, graph.nodes[b], out List<Node> goalList);
-                if (!success)
-                    throw new Exception("couldn't find a path between node(" + start.id + ")"
-                        + " and node(" + destination.id + ")");
-
-            SpawnPedestrian(goalList);
+            SpawnPedestrian(NewPath(pathStart));
         }
     }
 
@@ -90,15 +80,23 @@ public class PedestrianController : MonoBehaviour
         {
             if (Vector3.Distance(pedestrian.position, vehiclePosition) > spawnRadius)
                 removeQueue.Add(pedestrian);
-            // TODO: remove later
-            else if (pedestrian.state == Pedestrian.PedestrianState.ARRIVED)
-            {
-                removeQueue.Add(pedestrian);
-                maxPedestriansCount--;
-            }
         }
         
         RemovePedestrians(removeQueue);
+    }
+
+    public List<Node> NewPath(Node pathStart)
+    {
+        Node destination;
+        do { destination = graph.nodes[_random.Next(nodeCount)]; }
+        while (destination == pathStart);
+
+        bool success = Graph.FindPath(pathStart, destination, out List<Node> path);
+        if (!success)
+            throw new Exception("couldn't find a path between node(" + pathStart.id + ")"
+                + " and node(" + destination.id + ")");
+
+        return path;
     }
 
     private void RemovePedestrians(List<Pedestrian> removeQueue)
@@ -109,7 +107,7 @@ public class PedestrianController : MonoBehaviour
             if (RemovePedestrian(pedestrian))
                 removeQueue.Remove(pedestrian);
             else
-                Debug.LogWarning("Couldn't remove pedestrian at " + pedestrian.position);
+                Debug.LogWarning("couldn't remove pedestrian at " + pedestrian.position);
         }
     }
     
@@ -125,35 +123,49 @@ public class PedestrianController : MonoBehaviour
         return false;
     }
     
-    private void SpawnPedestrian(List<Node> goalList)
+    private void SpawnPedestrian(List<Node> path)
     {
         int id = availableIDs[0];
         availableIDs.RemoveAt(0);
         float walkingSpeed = (float) _random.NextDouble() * (maxWalkingSpeed - minWalkingSpeed) + minWalkingSpeed;
         walkingSpeed = KmhToMs(walkingSpeed);
 
-        GameObject pedestrianGO = Instantiate(pedestrianModelPrefab, _controllerTransform);
-        pedestrianGO.transform.name = "Pedestrian " + id;
+        GameObject pedestrianGO = Instantiate(pedestrianModelPrefab, transform);
+        pedestrianGO.name = "Pedestrian " + id;
 
         //TODO: include curved edges
-        Node firstGoal = goalList[0];
-        Node secondGoal = goalList[1];
+        Node firstGoal = path[0];
+        Node secondGoal = path[1];
         Edge edge = firstGoal.GetEdgeByNeighbor(secondGoal);
         float slider = (float) _random.NextDouble();
-        Vector3 spawnPosition = (1-slider) * firstGoal.position + slider * secondGoal.position;
+        Vector3 spawnPosition = (1 - slider) * firstGoal.position + slider * secondGoal.position;
         
-        Vector2 randomPosition = UnityEngine.Random.insideUnitCircle * edge.width;
+        Vector2 randomPosition = UnityEngine.Random.insideUnitCircle * (edge.width / 2);
         spawnPosition.x += randomPosition.x;
         spawnPosition.z += randomPosition.y;
-        //TODO: check collisions first before spawning
 
-        Pedestrian pedestrian = pedestrianGO.AddComponent<Pedestrian>();
-        pedestrian.Setup(id, spawnPosition, goalList, walkingSpeed, viewRadius);
-        
-        activePedestrians.Add(pedestrian);
+        int i = 0;
+        while (Physics.OverlapSphereNonAlloc(spawnPosition, spawnArea, new Collider[1]) > 0 && i < 20)
+        {
+            slider = (slider + 0.05f) % 1;
+            spawnPosition = (1 - slider) * firstGoal.position + slider * secondGoal.position;
+            spawnPosition.x += randomPosition.x;
+            spawnPosition.z += randomPosition.y;
+            i++;
+        }
+        if (i == 20)
+        {
+            Debug.Log("couldn't find a free area to spawn pedestrian. retry next frame");
+            availableIDs.Add(id);
+            Destroy(pedestrianGO);
+        } else
+        {
+            Pedestrian pedestrian = pedestrianGO.AddComponent<Pedestrian>();
+            pedestrian.Setup(this, id, spawnPosition, path, walkingSpeed, viewRadius);
+            activePedestrians.Add(pedestrian);
+        }
     }
 
-    // TODO: change spawn process. include edges too
     private Node GetRandomNearbyNode(Vector3 center, float radius)
     {
         List<Node> nearbyNodes = new List<Node>();
@@ -166,7 +178,7 @@ public class PedestrianController : MonoBehaviour
         }
 
         // TODO: spawn in invisible locations
-        Node nearbyNode = nearbyNodes[_random.Next(nearbyNodes.Length)];
+        Node nearbyNode = nearbyNodes[_random.Next(nearbyNodes.Count)];
         return nearbyNode;
     }
 

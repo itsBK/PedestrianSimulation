@@ -132,8 +132,8 @@ public class Graph
     /**
      * implementation of A-Star algorithm
      */
-    public static bool FindPath(Node start, Node end, out List<Node> result) {
-        result = new List<Node>();
+    public static bool FindPath(Node start, Node end, out List<Node> path) {
+        path = new List<Node>();
         Dictionary<Node, NodeCost> allNodes = new Dictionary<Node, NodeCost>();
         Dictionary<Node, NodeCost> unvisited = new Dictionary<Node, NodeCost>();
         NodeCost initialNodeCost = new NodeCost {
@@ -176,7 +176,7 @@ public class Graph
                 if (neighbor.Equals(end)) {
                     Node tail = end;
                     while (allNodes.ContainsKey(tail)) {
-                        result.Add(tail);
+                        path.Add(tail);
                         allNodes.TryGetValue(tail, out NodeCost body);
                         
                         if (body.predecessor == start)
@@ -185,8 +185,8 @@ public class Graph
                         tail = body.predecessor;
                     }
                     
-                    result.Add(start);
-                    result.Reverse();
+                    path.Add(start);
+                    path.Reverse();
                     return true;
                 }
             }

@@ -610,7 +610,7 @@ MonoBehaviour:
   maxPedestriansCount: 40
   minWalkingSpeed: 4
   maxWalkingSpeed: 6
-  viewRadius: 10
+  viewRadius: 5
   spawnRadius: 100
   speedUpTime: 1
 --- !u!4 &1205133707
