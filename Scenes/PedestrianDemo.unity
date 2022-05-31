@@ -607,11 +607,13 @@ MonoBehaviour:
   vehiclePosition: {x: 0, y: 0, z: 0}
   activePedestrians: []
   availableIDs: 
-  maxPedestriansCount: 40
+  maxPedestriansCount: 100
   minWalkingSpeed: 4
   maxWalkingSpeed: 6
   viewRadius: 5
-  spawnRadius: 100
+  spawnRadius: 400
+  vehicleViewRadius: 200
+  spawnArea: 4
   speedUpTime: 1
 --- !u!4 &1205133707
 Transform:

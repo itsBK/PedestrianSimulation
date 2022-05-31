@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 using Vector3 = UnityEngine.Vector3;
 
 public class Graph
@@ -9,7 +10,7 @@ public class Graph
     /**
      * To use in A-Star pathfinding algorithm
      */
-    public struct NodeCost
+    private struct NodeCost
     {
         public Node predecessor;
         public float hCost;
@@ -27,30 +28,55 @@ public class Graph
     
     public void Setup()
     {
-        Node[] nodes = {
-            new Node( 0, new Vector3(10, 0, 90), 5),
-            new Node( 1, new Vector3(50, 0, 90), 5),
-            new Node( 2, new Vector3(90, 0, 50), 5),
-            new Node( 3, new Vector3(50, 0, 10), 5),
-            new Node( 4, new Vector3(10, 0, 10), 5)
+        // Node[] nodes = {
+        //     new Node( 0, new Vector3(10, 0, 90), 5),
+        //     new Node( 1, new Vector3(50, 0, 90), 5),
+        //     new Node( 2, new Vector3(90, 0, 50), 5),
+        //     new Node( 3, new Vector3(50, 0, 10), 5),
+        //     new Node( 4, new Vector3(10, 0, 10), 5)
+        // };
+        //
+        // Edge[] edges = {
+        //     Edge.StraightEdge(0, 300, 5),
+        //     Edge.StraightEdge(1, 500, 5),
+        //     Edge.StraightEdge(2,  20, 5),
+        //     Edge.StraightEdge(3, 700, 5),
+        //     Edge.StraightEdge(4,  10, 5)
+        // };
+        // 
+        // int[,] adjMatrix = {
+        //     {-1,  0, -1,  1,  2},
+        //     { 0, -1,  0, -1,  3},
+        //     {-1,  0, -1,  4, -1},
+        //     { 1, -1,  4, -1,  4},
+        //     { 2,  3, -1,  4, -1}
+        // };
+        // SetGraphFrom(nodes, edges, adjMatrix);
+
+        Node[] nodes2 = {
+            new Node( 0, new Vector3(0, 0, 0), 5),
+            new Node( 1, new Vector3(200, 0, 0), 5),
+            new Node( 2, new Vector3(400, 0, 0), 5),
+            new Node( 3, new Vector3(0, 0, 200), 5),
+            new Node( 4, new Vector3(200, 0, 200), 5),
+            new Node( 5, new Vector3(200, 0, 400), 5)
         };
 
-        Edge[] edges = {
-            Edge.StraightEdge(0, 300, 5),
-            Edge.StraightEdge(1, 500, 5),
-            Edge.StraightEdge(2,  20, 5),
-            Edge.StraightEdge(3, 700, 5),
-            Edge.StraightEdge(4,  10, 5)
+        Edge[] edges2 = {
+            Edge.StraightEdge(0, 200, 5),
+            Edge.CurvedEdge(1, 200 * Mathf.PI / 2, 5, 200, new Vector3(200, 0, 0)),
+            Edge.CurvedEdge(2, 200 * Mathf.PI / 2, 5, 200, new Vector3(200, 0, 200))
         };
         
-        int[,] adjMatrix = {
-            {-1,  0, -1,  1,  2},
-            { 0, -1,  0, -1,  3},
-            {-1,  0, -1,  4, -1},
-            { 1, -1,  4, -1,  4},
-            { 2,  3, -1,  4, -1}
+        int[,] adjMatrix2 = {
+            {-1,  0, -1,  0, -1, -1},
+            { 0, -1,  0, -1,  0, -1},
+            {-1,  0, -1, -1,  1, -1},
+            { 0, -1, -1, -1,  0,  2},
+            {-1,  0,  1,  0, -1,  0},
+            {-1, -1, -1,  2,  0, -1}
         };
-        SetGraphFrom(nodes, edges, adjMatrix);
+        SetGraphFrom(nodes2, edges2, adjMatrix2);
     }
 
     /**
@@ -89,16 +115,6 @@ public class Graph
                 return edge;
         
         throw new KeyNotFoundException("the edge(id=" + id + ") could not be found in list of edges");
-    }
-
-    public Node[] GetNodes()
-    {
-        return nodes.ToArray();
-    }
-
-    public Edge[] GetEdges()
-    {
-        return edges.ToArray();
     }
 
     public int[,] GetAdjacencyMatrix()

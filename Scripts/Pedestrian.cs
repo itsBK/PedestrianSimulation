@@ -10,7 +10,8 @@ public class Pedestrian : MonoBehaviour
         IDLE,
         WALKING,
         AVOIDING_COLLISION,
-        SLOWING_SPEED,
+        SLOWING_DOWN,
+        SWITCHING_GOAL,
         ARRIVED
     }
 
@@ -21,6 +22,7 @@ public class Pedestrian : MonoBehaviour
     public List<Node> path;
     public Node lastGoal;
     public Node currentGoal;
+    public Edge currentEdge;
     public int currentGoalIndex;
     public int finalGoalIndex;
     
@@ -36,9 +38,9 @@ public class Pedestrian : MonoBehaviour
     public Vector3 acceleration;
     
 
-    public void Setup(PedestrianController controller, int id, Vector3 spawnPosition, List<Node> path, float maxWalkingSpeed, float viewRadius)
+    public void Setup(int id, Vector3 spawnPosition, List<Node> path, float maxWalkingSpeed, float viewRadius)
     {
-        _controller = controller;
+        _controller = transform.parent.GetComponent<PedestrianController>();
         this.id = id;
         this.maxWalkingSpeed = maxWalkingSpeed;
         this.viewRadius = viewRadius;
@@ -58,6 +60,7 @@ public class Pedestrian : MonoBehaviour
         this.path = path;
         lastGoal = path[0];
         currentGoal = path[1];
+        currentEdge = lastGoal.GetEdgeByNeighbor(currentGoal);
         currentGoalIndex = 1;
         finalGoalIndex = path.Count - 1;
     }
@@ -74,16 +77,22 @@ public class Pedestrian : MonoBehaviour
                 return;
             
             case PedestrianState.WALKING:
-                effectingForce = SeekWithOffset(currentGoal);
+                effectingForce = currentEdge.type == Edge.EdgeType.Straight ?
+                    SeekWithOffset(currentGoal) : FollowCurvedPath(currentEdge);
                 break;
             
             case PedestrianState.AVOIDING_COLLISION:
+            case PedestrianState.SLOWING_DOWN:
                 effectingForce = AvoidCollision();
                 break;
             
-            case PedestrianState.SLOWING_SPEED:
-                effectingForce = AvoidCollision();
-                break;
+            
+            case PedestrianState.SWITCHING_GOAL:
+                lastGoal = currentGoal;
+                currentGoal = path[++currentGoalIndex];
+                currentEdge = lastGoal.GetEdgeByNeighbor(currentGoal);
+                state = PedestrianState.WALKING;
+                return;
             
             case PedestrianState.ARRIVED:
                 Node pathStart = path[finalGoalIndex];
@@ -94,34 +103,37 @@ public class Pedestrian : MonoBehaviour
                 throw new ArgumentOutOfRangeException("reached an unreachable PedestrianState");
         }
         
-        MovePedestrian(effectingForce, deltaTime);
+        MovePedestrian(effectingForce, deltaTime, state == PedestrianState.SLOWING_DOWN);
         
         if (PedestrianWithinViewRadius())
-            // if (PedestrianWithinSafeZone2())
-            //     state = PedestrianState.SLOWING_SPEED;
-            // else
-            state = PedestrianState.AVOIDING_COLLISION;
+            if (PedestrianWithinSafeZone())
+                state = PedestrianState.SLOWING_DOWN;
+            else
+                state = PedestrianState.AVOIDING_COLLISION;
         else
             state = PedestrianState.WALKING;
         
         if (Vector3.Distance(position, currentGoal.position) < currentGoal.radius)
         {
             if (currentGoalIndex == finalGoalIndex)
-            {
                 state = PedestrianState.ARRIVED;
-            } else
-            {
-                lastGoal = currentGoal;
-                currentGoal = path[++currentGoalIndex];
-            }
+            else
+                state = PedestrianState.SWITCHING_GOAL;
         }
     }
     
-    public void MovePedestrian(Vector3 effectingForce, float deltaTime)
+    public void MovePedestrian(Vector3 effectingForce, float deltaTime, bool slowSpeed)
     {
-        acceleration = Clamp(effectingForce, maxSteerForce);
+        acceleration = Vector3.ClampMagnitude(effectingForce, maxSteerForce);
         velocity += acceleration * deltaTime;
-        velocity = Clamp(velocity, maxWalkingSpeed);
+        velocity = Vector3.ClampMagnitude(velocity, maxWalkingSpeed);
+        //TODO: another way to slow down
+        if (slowSpeed)
+        {
+            float speed = velocity.magnitude;
+            speed -= speed * deltaTime;
+            velocity = velocity.normalized * speed;
+        }
         position += velocity * deltaTime;
 
         transform.position = position;
@@ -140,18 +152,45 @@ public class Pedestrian : MonoBehaviour
     public Vector3 SeekWithOffset(Node target)
     {
         float radius = target.radius;
-        Vector3 ahead = position + velocity.normalized * maxWalkingSpeed;
-        Vector3 projTargetOnAhead = (Vector3.Dot(target.position, ahead) / ahead.magnitude) * ahead;
-        if (Vector3.Distance(ahead, projTargetOnAhead) > radius)
+        Vector3 targetPos = target.position;
+        Vector3 ahead = velocity.normalized;
+        
+        Vector3 projTargetOnAhead = Vector3.Dot(targetPos - position, ahead) * ahead + position;
+        if (Vector3.Distance(projTargetOnAhead, targetPos) > radius)
         {
-            return Seek(target.position);
+            Vector3 edgeOfNode = (projTargetOnAhead - targetPos).normalized * (radius / 5 * 4) + targetPos;
+            return Seek(edgeOfNode);
         }
+
+        return Vector3.zero;
+    }
+    
+    public Vector3 FollowCurvedPath(Edge curvedEdge)
+    {
+        float radius = curvedEdge.radius;
+        float halfWidth = curvedEdge.width / 2;
+        Vector3 center = curvedEdge.center;
+        
+        Vector3 ahead = position + velocity;
+        Vector3 aheadRelativeToCenter = ahead - center;
+        float distToCenter = aheadRelativeToCenter.magnitude;
+        
+        if (distToCenter < radius - halfWidth || distToCenter > radius + halfWidth)
+        {
+            Vector3 projAheadOnPath = aheadRelativeToCenter.normalized * radius + center;
+            return Seek(projAheadOnPath);
+        }
+
         return Vector3.zero;
     }
 
     public Vector3 AvoidCollision()
     {
-        Vector3 direction = (currentGoal.position - position).normalized;
+        Vector3 direction;
+        if (currentEdge.type == Edge.EdgeType.Curve)
+            direction = (FollowCurvedPath(currentEdge) + velocity).normalized;
+        else
+            direction = (currentGoal.position - position).normalized;
         Ray ray = new Ray();
         
         int i = 0;
@@ -172,7 +211,7 @@ public class Pedestrian : MonoBehaviour
         return steeringForce * multiplier;
     }
 
-    public bool PedestrianWithinViewRadius()
+    private bool PedestrianWithinViewRadius()
     {
         Collider[] colliders = Physics.OverlapSphere(position, viewRadius);
 
@@ -183,13 +222,13 @@ public class Pedestrian : MonoBehaviour
         {
             // collider position in local space
             Vector3 relPos = transform.InverseTransformPoint(collider1.transform.position);
-            if (relPos.z >= 0)      // check if pedestrian ahead
+            if (relPos.z > 0)      // check if pedestrian ahead
                 return true;
         }
         return false;
     }
 
-    public bool PedestrianWithinSafeZone()
+    private bool PedestrianWithinSafeZone()
     {
         Collider[] colliders = Physics.OverlapSphere(position, safeZone);
         
@@ -203,64 +242,15 @@ public class Pedestrian : MonoBehaviour
             if (relPos.z < 0) // check if pedestrian ahead
                 continue;
 
-            if (Vector3.Angle(relPos, Vector3.forward) <= 30)
+            if (Vector3.Angle(relPos, Vector3.forward) <= 45)
             {
-                if (Vector3.Angle(transform.forward, collider1.transform.forward) <= 45)
+                if (transform.InverseTransformDirection(collider1.transform.forward).z > 0)
                     return true;
             }
         }
         return false;
     }
-    
-    public bool PedestrianWithinSafeZone2()
-    {
-        bool hit = Physics.SphereCast(position, modelWidth / 2,
-            velocity.normalized, out RaycastHit hitInfo, safeZone);
 
-        if (hit) {
-            if (Vector3.Angle(transform.forward, hitInfo.transform.forward) <= 30)
-                return true;
-        }
-        return false;
-    }
-    
-    /*
-    public void OnDrawGizmosSelected()
-    {
-        if (state == PedestrianState.SLOWING_SPEED)
-        {
-            Collider[] colliders = Physics.OverlapSphere(position, safeZone);
-
-            foreach (Collider collider1 in colliders)
-            {
-                Vector3 relPos = transform.InverseTransformPoint(collider1.transform.position);
-                if (relPos.z < 0) // skip if behind
-                    continue;
-                
-                if (collider1.GetComponentInParent<Pedestrian>().id == id)
-                {
-                    Gizmos.color = Color.green;
-                    Gizmos.DrawSphere(collider1.transform.position, modelWidth / 2);
-                } else if(Vector3.Angle(relPos, Vector3.forward) <= 30 &&
-                    Vector3.Angle(transform.forward, collider1.transform.forward) <= 45) {
-                    Gizmos.color = Color.red;
-                    Gizmos.DrawSphere(collider1.transform.position, modelWidth / 2);
-                }
-            }
-        }
-    }
-    */
-
-    /**
-     * clamp the vector to the specified length if it succeeds it
-     */
-    public Vector3 Clamp(Vector3 vector, float maxLength)
-    {
-        if (vector.magnitude > maxLength)
-            vector = vector.normalized * maxLength;
-        return vector;
-    }
-    
     public Vector3 GetDirection(Vector3 direction, int i)
     {
         // input:      i = 0,  1,  2,   3,   4,   5,   6

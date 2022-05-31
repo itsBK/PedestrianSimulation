@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Random = System.Random;
+using Vector2 = UnityEngine.Vector2;
+using Vector3 = UnityEngine.Vector3;
 
 public class PedestrianController : MonoBehaviour
 {
@@ -18,8 +20,9 @@ public class PedestrianController : MonoBehaviour
     public float minWalkingSpeed = 4;
     public float maxWalkingSpeed = 6;
     public float viewRadius = 5;
-    public float spawnRadius = 100;
-    public float spawnArea = 2;
+    public float spawnRadius = 400;
+    public float vehicleViewRadius = 200;
+    public float spawnArea = 4;
 
     // TODO: temporal
     [Range(1, 10)]
@@ -133,27 +136,33 @@ public class PedestrianController : MonoBehaviour
         GameObject pedestrianGO = Instantiate(pedestrianModelPrefab, transform);
         pedestrianGO.name = "Pedestrian " + id;
 
-        //TODO: include curved edges
         Node firstGoal = path[0];
         Node secondGoal = path[1];
         Edge edge = firstGoal.GetEdgeByNeighbor(secondGoal);
-        float slider = (float) _random.NextDouble();
-        Vector3 spawnPosition = (1 - slider) * firstGoal.position + slider * secondGoal.position;
         
+        float slider = (float) _random.NextDouble();
+        Vector3 spawnPosition;
         Vector2 randomPosition = UnityEngine.Random.insideUnitCircle * (edge.width / 2);
-        spawnPosition.x += randomPosition.x;
-        spawnPosition.z += randomPosition.y;
 
         int i = 0;
-        while (Physics.OverlapSphereNonAlloc(spawnPosition, spawnArea, new Collider[1]) > 0 && i < 20)
-        {
-            slider = (slider + 0.05f) % 1;
+        do {
+            slider = (slider + spawnArea / edge.cost) % 1;
             spawnPosition = (1 - slider) * firstGoal.position + slider * secondGoal.position;
+            if (edge.type == Edge.EdgeType.Curve)
+            {
+                Vector3 center = edge.center;
+                spawnPosition = (spawnPosition - center).normalized * edge.radius + center;
+            }
+
             spawnPosition.x += randomPosition.x;
             spawnPosition.z += randomPosition.y;
             i++;
-        }
-        if (i == 20)
+            
+        } while ((Physics.OverlapSphereNonAlloc(spawnPosition, spawnArea, new Collider[1]) > 0
+                    || Vector3.Distance(spawnPosition, vehiclePosition) < vehicleViewRadius)
+                && i < edge.cost / spawnArea);
+        
+        if (i == (int) (edge.cost / spawnArea))
         {
             Debug.Log("couldn't find a free area to spawn pedestrian. retry next frame");
             availableIDs.Add(id);
@@ -161,7 +170,7 @@ public class PedestrianController : MonoBehaviour
         } else
         {
             Pedestrian pedestrian = pedestrianGO.AddComponent<Pedestrian>();
-            pedestrian.Setup(this, id, spawnPosition, path, walkingSpeed, viewRadius);
+            pedestrian.Setup(id, spawnPosition, path, walkingSpeed, viewRadius);
             activePedestrians.Add(pedestrian);
         }
     }
@@ -172,9 +181,7 @@ public class PedestrianController : MonoBehaviour
         foreach (Node node in graph.nodes)
         {
             if (Vector3.Distance(node.position, center) <= radius)
-            {
                 nearbyNodes.Add(node);
-            }
         }
 
         // TODO: spawn in invisible locations

@@ -1,26 +1,41 @@
-﻿using UnityEditor;
+﻿using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 public class GizmosDebug : MonoBehaviour
 {
 
+    private PedestrianController _controller;
+
     private void OnDrawGizmos()
     {
-        PedestrianController controller = FindObjectOfType<PedestrianController>();
+        if (_controller == null)
+        {
+            _controller = FindObjectOfType<PedestrianController>();
+            return;
+        }
+
         Handles.color = Color.green;
-        Handles.DrawWireDisc(controller.vehicle.transform.position, new Vector3(0, 1, 0), controller.spawnRadius);
+        Handles.DrawWireDisc(_controller.vehiclePosition, new Vector3(0, 1, 0), _controller.spawnRadius);
+        Handles.color = Color.red;
+        Handles.DrawWireDisc(_controller.vehiclePosition, new Vector3(0, 1, 0), _controller.vehicleViewRadius);
         
-        foreach (Node node in controller.graph.nodes)
+        foreach (Node node in _controller.graph.nodes)
         {
             Handles.color = Color.red;
             Handles.DrawWireDisc(node.position, Vector3.up, node.radius);
-            foreach (Node neighbor in node.neighbors.Keys)
+            Handles.color = Color.white;
+            Gizmos.color = Color.white;
+            foreach (KeyValuePair<Node, Edge> neighbor in node.neighbors)
             {
-                Gizmos.DrawLine(node.position, neighbor.position);
+                if (neighbor.Value.type == Edge.EdgeType.Straight)
+                    Gizmos.DrawLine(node.position, neighbor.Key.position);
+                else
+                    Handles.DrawWireArc(neighbor.Value.center, Vector3.up, neighbor.Key.position - neighbor.Value.center, 90, neighbor.Value.radius);
             }
         }
 
-        foreach (Pedestrian pedestrian in controller.activePedestrians)
+        foreach (Pedestrian pedestrian in _controller.activePedestrians)
         {
             Gizmos.color = Color.green;
             Gizmos.DrawRay(pedestrian.position, pedestrian.velocity);
@@ -33,17 +48,11 @@ public class GizmosDebug : MonoBehaviour
             
             Vector3 direction = pedestrian.velocity.normalized;
             Gizmos.color = Color.red;
-            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.safeZone, 11));
-            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.safeZone, 12));
+            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.safeZone, 17));
+            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.safeZone, 18));
             Gizmos.color = Color.blue;
             Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.viewRadius, 35));
             Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.viewRadius, 36));
-            Gizmos.color = Color.green;
-            Gizmos.DrawLine(pedestrian.position, pedestrian.currentGoal.position);
-            // Gizmos.color = Color.red;
-            // Gizmos.DrawRay(pedestrian.position, pedestrian.avoidance);
-            // Gizmos.color = Color.yellow;
-            // Gizmos.DrawRay(pedestrian.position, pedestrian.seek);direction
         }
     }
 

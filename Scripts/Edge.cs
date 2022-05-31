@@ -1,4 +1,6 @@
-﻿public class Edge
+﻿using UnityEngine;
+
+public class Edge
 {
 
     public enum EdgeType
@@ -12,20 +14,18 @@
     public float width;
     public EdgeType type;
 
-    public bool rightCurve;
     public float radius;
-    public float angle;
+    public Vector3 center;
 
-    public Edge(int id, float cost, float width, EdgeType type, float radius = 0, float angle = 0, bool rightCurve = false)
+    public Edge(int id, float cost, float width, EdgeType type, float radius = 0, Vector3 center = new Vector3())
     {
         this.id = id;
         this.cost = cost;
         this.width = width;
         this.type = type;
         
-        this.rightCurve = rightCurve;
         this.radius = radius;
-        this.angle = angle;
+        this.center = center;
     }
 
     public static Edge StraightEdge(int id, float cost, float width)
@@ -33,8 +33,8 @@
         return new Edge(id, cost, width, EdgeType.Straight);
     }
 
-    public static Edge CurvedEdge(int id, float cost, float width, float radius, float angle, bool rightCurve)
+    public static Edge CurvedEdge(int id, float cost, float width, float radius, Vector3 center)
     {
-        return new Edge(id, cost, width, EdgeType.Curve, radius, angle, rightCurve);
+        return new Edge(id, cost, width, EdgeType.Curve, radius, center);
     }
 }
