@@ -611,8 +611,8 @@ MonoBehaviour:
   minWalkingSpeed: 4
   maxWalkingSpeed: 6
   viewRadius: 5
-  spawnRadius: 400
-  vehicleViewRadius: 200
+  spawnRadius: 200
+  vehicleViewRadius: 50
   spawnArea: 4
   speedUpTime: 1
 --- !u!4 &1205133707
