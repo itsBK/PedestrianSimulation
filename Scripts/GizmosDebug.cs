@@ -44,12 +44,12 @@ public class GizmosDebug : MonoBehaviour
             Handles.color = Color.blue;
             Handles.DrawWireDisc(pedestrian.position, Vector3.up, pedestrian.viewRadius);
             Handles.color = Color.red;
-            Handles.DrawWireDisc(pedestrian.position, Vector3.up, pedestrian.safeZone);
+            Handles.DrawWireDisc(pedestrian.position, Vector3.up, pedestrian.slowDownRadius);
             
             Vector3 direction = pedestrian.velocity.normalized;
             Gizmos.color = Color.red;
-            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.safeZone, 17));
-            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.safeZone, 18));
+            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.slowDownRadius, 17));
+            Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.slowDownRadius, 18));
             Gizmos.color = Color.blue;
             Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.viewRadius, 35));
             Gizmos.DrawRay(pedestrian.position, pedestrian.GetDirection(direction * pedestrian.viewRadius, 36));

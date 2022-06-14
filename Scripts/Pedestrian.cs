@@ -14,55 +14,62 @@ public class Pedestrian : MonoBehaviour
         SWITCHING_GOAL,
         ARRIVED
     }
+    
+    private const float MAX_STEER_FORCE = 3;
+    private const float ANIMATION_WALKING_SPEED = 2.1f;
 
     private PedestrianController _controller;
+    private Animator _animator;
+    
+    private List<Node> _path;
+    private Node _lastGoal;
+    private Node _currentGoal;
+    private Edge _currentEdge;
+    private int _currentGoalIndex;
+    private int _finalGoalIndex;
 
     public int id;
     public PedestrianState state = PedestrianState.IDLE;
-    public List<Node> path;
-    public Node lastGoal;
-    public Node currentGoal;
-    public Edge currentEdge;
-    public int currentGoalIndex;
-    public int finalGoalIndex;
-    
-    public float maxSteerForce = 3;
     public float maxWalkingSpeed;
     public float viewRadius;
-    public float safeZone = 2;
-    //TODO: automatize this
-    public float modelWidth = 0.5f;
+    public float slowDownRadius;
+    public float modelWidth;
 
     public Vector3 position;
     public Vector3 velocity;
     public Vector3 acceleration;
     
 
-    public void Setup(int id, Vector3 spawnPosition, List<Node> path, float maxWalkingSpeed, float viewRadius)
+    public void Setup(int id, Vector3 spawnPosition, List<Node> path, float maxWalkingSpeed, float viewRadius, float slowDownRadius)
     {
         _controller = transform.parent.GetComponent<PedestrianController>();
+        _animator = GetComponent<Animator>();
+        modelWidth = GetComponent<BoxCollider>().size.x;
+        
         this.id = id;
         this.maxWalkingSpeed = maxWalkingSpeed;
         this.viewRadius = viewRadius;
+        this.slowDownRadius = slowDownRadius;
         SetPath(path);
         
         position = spawnPosition;
-        Vector3 direction = (currentGoal.position - lastGoal.position).normalized;
+        Vector3 direction = (_currentGoal.position - _lastGoal.position).normalized;
         velocity = direction * maxWalkingSpeed;
+        acceleration = Vector3.zero;
         
         transform.position = spawnPosition;
         transform.forward = direction;
     }
 
-    public void SetPath(List<Node> path)
+    private void SetPath(List<Node> path)
     {
         state = PedestrianState.WALKING;
-        this.path = path;
-        lastGoal = path[0];
-        currentGoal = path[1];
-        currentEdge = lastGoal.GetEdgeByNeighbor(currentGoal);
-        currentGoalIndex = 1;
-        finalGoalIndex = path.Count - 1;
+        _path = path;
+        _lastGoal = path[0];
+        _currentGoal = path[1];
+        _currentEdge = _lastGoal.GetEdgeByNeighbor(_currentGoal);
+        _currentGoalIndex = 1;
+        _finalGoalIndex = path.Count - 1;
     }
 
     /**
@@ -77,8 +84,8 @@ public class Pedestrian : MonoBehaviour
                 return;
             
             case PedestrianState.WALKING:
-                effectingForce = currentEdge.type == Edge.EdgeType.Straight ?
-                    SeekWithOffset(currentGoal) : FollowCurvedPath(currentEdge);
+                effectingForce = _currentEdge.type == Edge.EdgeType.Straight ?
+                    SeekWithOffset(_currentGoal) : FollowCurvedPath(_currentEdge);
                 break;
             
             case PedestrianState.AVOIDING_COLLISION:
@@ -88,14 +95,14 @@ public class Pedestrian : MonoBehaviour
             
             
             case PedestrianState.SWITCHING_GOAL:
-                lastGoal = currentGoal;
-                currentGoal = path[++currentGoalIndex];
-                currentEdge = lastGoal.GetEdgeByNeighbor(currentGoal);
+                _lastGoal = _currentGoal;
+                _currentGoal = _path[++_currentGoalIndex];
+                _currentEdge = _lastGoal.GetEdgeByNeighbor(_currentGoal);
                 state = PedestrianState.WALKING;
                 return;
             
             case PedestrianState.ARRIVED:
-                Node pathStart = path[finalGoalIndex];
+                Node pathStart = _path[_finalGoalIndex];
                 SetPath(_controller.NewPath(pathStart));
                 return;
             
@@ -106,25 +113,21 @@ public class Pedestrian : MonoBehaviour
         MovePedestrian(effectingForce, deltaTime, state == PedestrianState.SLOWING_DOWN);
         
         if (PedestrianWithinViewRadius())
-            if (PedestrianWithinSafeZone())
-                state = PedestrianState.SLOWING_DOWN;
-            else
-                state = PedestrianState.AVOIDING_COLLISION;
+            state = PedestrianWithinSafeZone() ?
+                PedestrianState.SLOWING_DOWN : PedestrianState.AVOIDING_COLLISION;
         else
             state = PedestrianState.WALKING;
         
-        if (Vector3.Distance(position, currentGoal.position) < currentGoal.radius)
+        if (Vector3.Distance(position, _currentGoal.position) < _currentGoal.radius)
         {
-            if (currentGoalIndex == finalGoalIndex)
-                state = PedestrianState.ARRIVED;
-            else
-                state = PedestrianState.SWITCHING_GOAL;
+            state = _currentGoalIndex == _finalGoalIndex ?
+                PedestrianState.ARRIVED : PedestrianState.SWITCHING_GOAL;
         }
     }
     
-    public void MovePedestrian(Vector3 effectingForce, float deltaTime, bool slowSpeed)
+    private void MovePedestrian(Vector3 effectingForce, float deltaTime, bool slowSpeed)
     {
-        acceleration = Vector3.ClampMagnitude(effectingForce, maxSteerForce);
+        acceleration = Vector3.ClampMagnitude(effectingForce, MAX_STEER_FORCE);
         velocity += acceleration * deltaTime;
         velocity = Vector3.ClampMagnitude(velocity, maxWalkingSpeed);
         //TODO: another way to slow down
@@ -135,12 +138,15 @@ public class Pedestrian : MonoBehaviour
             velocity = velocity.normalized * speed;
         }
         position += velocity * deltaTime;
-
+        
+        
+        _animator.speed = velocity.magnitude / ANIMATION_WALKING_SPEED;
+        
         transform.position = position;
         transform.forward = velocity.normalized;
     }
     
-    public Vector3 Seek(Vector3 target)
+    private Vector3 Seek(Vector3 target)
     {
         Vector3 desiredVelocity = (target - position).normalized * maxWalkingSpeed;
         return desiredVelocity - velocity;
@@ -149,7 +155,7 @@ public class Pedestrian : MonoBehaviour
     /**
      * <returns>steering force required to follow the target</returns>
      */
-    public Vector3 SeekWithOffset(Node target)
+    private Vector3 SeekWithOffset(Node target)
     {
         float radius = target.radius;
         Vector3 targetPos = target.position;
@@ -165,7 +171,7 @@ public class Pedestrian : MonoBehaviour
         return Vector3.zero;
     }
     
-    public Vector3 FollowCurvedPath(Edge curvedEdge)
+    private Vector3 FollowCurvedPath(Edge curvedEdge)
     {
         float radius = curvedEdge.radius;
         float halfWidth = curvedEdge.width / 2;
@@ -184,13 +190,10 @@ public class Pedestrian : MonoBehaviour
         return Vector3.zero;
     }
 
-    public Vector3 AvoidCollision()
+    private Vector3 AvoidCollision()
     {
-        Vector3 direction;
-        if (currentEdge.type == Edge.EdgeType.Curve)
-            direction = (FollowCurvedPath(currentEdge) + velocity).normalized;
-        else
-            direction = (currentGoal.position - position).normalized;
+        Vector3 direction = _currentEdge.type == Edge.EdgeType.Curve ?
+            (FollowCurvedPath(_currentEdge) + velocity).normalized : (_currentGoal.position - position).normalized;
         Ray ray = new Ray();
         
         int i = 0;
@@ -230,7 +233,7 @@ public class Pedestrian : MonoBehaviour
 
     private bool PedestrianWithinSafeZone()
     {
-        Collider[] colliders = Physics.OverlapSphere(position, safeZone);
+        Collider[] colliders = Physics.OverlapSphere(position, slowDownRadius);
         
         if (colliders.Length == 1)
             return false;
