@@ -16,7 +16,7 @@ public class Pedestrian : MonoBehaviour
     }
     
     private const float MAX_STEER_FORCE = 3;
-    private const float ANIMATION_WALKING_SPEED = 2.1f;
+    private static readonly int ANIMATION_WALKING_SPEED = Animator.StringToHash("walkingSpeed");
 
     private PedestrianController _controller;
     private Animator _animator;
@@ -38,7 +38,7 @@ public class Pedestrian : MonoBehaviour
     public Vector3 position;
     public Vector3 velocity;
     public Vector3 acceleration;
-    
+
 
     public void Setup(int id, Vector3 spawnPosition, List<Node> path, float maxWalkingSpeed, float viewRadius, float slowDownRadius)
     {
@@ -130,18 +130,16 @@ public class Pedestrian : MonoBehaviour
         acceleration = Vector3.ClampMagnitude(effectingForce, MAX_STEER_FORCE);
         velocity += acceleration * deltaTime;
         velocity = Vector3.ClampMagnitude(velocity, maxWalkingSpeed);
-        //TODO: another way to slow down
+        
+        float speed = velocity.magnitude;
         if (slowSpeed)
         {
-            float speed = velocity.magnitude;
             speed -= speed * deltaTime;
             velocity = velocity.normalized * speed;
         }
         position += velocity * deltaTime;
         
-        
-        _animator.speed = velocity.magnitude / ANIMATION_WALKING_SPEED;
-        
+        _animator.SetFloat(ANIMATION_WALKING_SPEED, speed);
         transform.position = position;
         transform.forward = velocity.normalized;
     }

@@ -514,9 +514,9 @@ MonoBehaviour:
   collisionFreeSpawnRadius: 4
   activePedestrians: []
   availableIDs: 
-  pedestrianModelPrefab: {fileID: 7798269891465978109, guid: 3becb8baa4c1f6a4bb1c60b8596009f1, type: 3}
+  pedestrianModelPrefab: {fileID: 5898862339761056223, guid: b780d5bcaab2c35438dbdb5683ff4876, type: 3}
   minWalkingSpeed: 4
-  maxWalkingSpeed: 6
+  maxWalkingSpeed: 7
   viewRadius: 5
   slowDownRadius: 2
 --- !u!4 &1205133707
