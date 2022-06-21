@@ -7,12 +7,12 @@ public class Pedestrian : MonoBehaviour
 {
 
     public enum PedestrianState {
-        IDLE,
-        WALKING,
-        AVOIDING_COLLISION,
-        SLOWING_DOWN,
-        SWITCHING_GOAL,
-        ARRIVED
+        Idle = 0,
+        Walking = 1,
+        AvoidingCollision = 2,
+        SlowingDown = 3,
+        SwitchingGoal = 4,
+        Arrived = 5
     }
     
     private const float MAX_STEER_FORCE = 3;
@@ -29,7 +29,7 @@ public class Pedestrian : MonoBehaviour
     private int _finalGoalIndex;
 
     public int id;
-    public PedestrianState state = PedestrianState.IDLE;
+    public PedestrianState state = PedestrianState.Idle;
     public float maxWalkingSpeed;
     public float viewRadius;
     public float slowDownRadius;
@@ -63,7 +63,7 @@ public class Pedestrian : MonoBehaviour
 
     private void SetPath(List<Node> path)
     {
-        state = PedestrianState.WALKING;
+        state = PedestrianState.Walking;
         _path = path;
         _lastGoal = path[0];
         _currentGoal = path[1];
@@ -80,28 +80,28 @@ public class Pedestrian : MonoBehaviour
         Vector3 effectingForce;
         switch (state)
         {
-            case PedestrianState.IDLE:
+            case PedestrianState.Idle:
                 return;
             
-            case PedestrianState.WALKING:
+            case PedestrianState.Walking:
                 effectingForce = _currentEdge.type == Edge.EdgeType.Straight ?
                     SeekWithOffset(_currentGoal) : FollowCurvedPath(_currentEdge);
                 break;
             
-            case PedestrianState.AVOIDING_COLLISION:
-            case PedestrianState.SLOWING_DOWN:
+            case PedestrianState.AvoidingCollision:
+            case PedestrianState.SlowingDown:
                 effectingForce = AvoidCollision();
                 break;
             
             
-            case PedestrianState.SWITCHING_GOAL:
+            case PedestrianState.SwitchingGoal:
                 _lastGoal = _currentGoal;
                 _currentGoal = _path[++_currentGoalIndex];
                 _currentEdge = _lastGoal.GetEdgeByNeighbor(_currentGoal);
-                state = PedestrianState.WALKING;
+                state = PedestrianState.Walking;
                 return;
             
-            case PedestrianState.ARRIVED:
+            case PedestrianState.Arrived:
                 Node pathStart = _path[_finalGoalIndex];
                 SetPath(_controller.NewPath(pathStart));
                 return;
@@ -110,18 +110,18 @@ public class Pedestrian : MonoBehaviour
                 throw new ArgumentOutOfRangeException("reached an unreachable PedestrianState");
         }
         
-        MovePedestrian(effectingForce, deltaTime, state == PedestrianState.SLOWING_DOWN);
+        MovePedestrian(effectingForce, deltaTime, state == PedestrianState.SlowingDown);
         
         if (PedestrianWithinViewRadius())
             state = PedestrianWithinSafeZone() ?
-                PedestrianState.SLOWING_DOWN : PedestrianState.AVOIDING_COLLISION;
+                PedestrianState.SlowingDown : PedestrianState.AvoidingCollision;
         else
-            state = PedestrianState.WALKING;
+            state = PedestrianState.Walking;
         
         if (Vector3.Distance(position, _currentGoal.position) < _currentGoal.radius)
         {
             state = _currentGoalIndex == _finalGoalIndex ?
-                PedestrianState.ARRIVED : PedestrianState.SWITCHING_GOAL;
+                PedestrianState.Arrived : PedestrianState.SwitchingGoal;
         }
     }
     
@@ -260,5 +260,17 @@ public class Pedestrian : MonoBehaviour
         int angle = ((i + 1) / 2) * 5;
         return Quaternion.AngleAxis(sign * angle, Vector3.up) * direction;
     }
-    
+
+    public PedestrianDTO ToDTO()
+    {
+        return new PedestrianDTO {
+            Id = id,
+            State = state,
+            PositionX = position.x,
+            PositionY = position.y,
+            PositionZ = position.z,
+            RotationY = transform.eulerAngles.y,
+            Speed = velocity.magnitude,
+        };
+    }
 }

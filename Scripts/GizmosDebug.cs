@@ -9,11 +9,7 @@ public class GizmosDebug : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        if (_controller == null)
-        {
-            _controller = FindObjectOfType<PedestrianController>();
-            return;
-        }
+        _controller ??= FindObjectOfType<PedestrianController>();
 
         Handles.color = Color.green;
         Handles.DrawWireDisc(_controller.vehiclePosition, new Vector3(0, 1, 0), _controller.spawnRadius);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+//using Newtonsoft.Json;
 using UnityEngine;
 using Random = System.Random;
 using Vector2 = UnityEngine.Vector2;
@@ -11,6 +12,8 @@ public class PedestrianController : MonoBehaviour
     public Graph graph;
     private int _nodeCount;
     private Random _random;
+    // uncomment this line + lines in Start() and Update() to enable communication with server using simba
+    // private List<PedestrianDTO> _pedestrianDTOs;
     
     [Header("Vehicle")]
     public GameObject vehicle;
@@ -27,7 +30,7 @@ public class PedestrianController : MonoBehaviour
     [Header("Pedestrian Variables:")]
     public GameObject pedestrianModelPrefab;
     public float minWalkingSpeed = 4;
-    public float maxWalkingSpeed = 6;
+    public float maxWalkingSpeed = 7;
     public float viewRadius = 5;
     public float slowDownRadius = 2;
 
@@ -39,6 +42,7 @@ public class PedestrianController : MonoBehaviour
         _nodeCount = graph.nodes.Count;
         
         activePedestrians = new List<Pedestrian>(maxPedestriansCount);
+        // _pedestrianDTOs = new List<PedestrianDTO>();
         availableIDs = new List<int>();
         
         for (int i = 0; i < maxPedestriansCount; i++)
@@ -53,8 +57,13 @@ public class PedestrianController : MonoBehaviour
         foreach (Pedestrian pedestrian in activePedestrians)
         {
             pedestrian.UpdateStatus(deltaTime);
+            // _pedestrianDTOs.Add(pedestrian.ToDTO());
         }
         CheckForRemoval();
+
+        // string pedestrianInfoList = JsonConvert.SerializeObject(_pedestrianDTOs, Formatting.Indented);
+        // SimbaHelper.Instance.SendPedestrianInfo(pedestrianInfoList);
+        // _pedestrianDTOs.Clear();
     }
 
     /**

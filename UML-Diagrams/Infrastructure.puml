@@ -1,0 +1,135 @@
+﻿@startuml
+'https://plantuml.com/class-diagram
+
+skinparam linetype ortho
+
+object Vehicle
+class MonoBehaviour {
+}
+
+class PedestrianController {
+    +vehicleViewRadius : float
+    +maxPedestriansCount : int
+    +spawnRadius : float
+    +availableIDs : List<int>
+    +minWalkingSpeed : float
+    +maxWalkingSpeed : float
+    --
+    -Start() : void
+    -Update() : void
+    .. spawning pedestrians ..
+    -CheckForSpawning() : void
+    +NewPath(Node pathStart) : List<Node>
+    -SpawnPedestrian(List<Node> path) : void
+    -GetRandomNearbyNode(Vector3 center, float radius) : Node
+    .. removing pedestrians ..
+    -CheckForRemoval() : void
+    -RemovePedestrians(List<Pedestrian> removeQueue) : void
+    -RemovePedestrian(Pedestrian pedestrian) : bool
+}
+
+package "Pedestrian GameObject" <<Rectangle>> {
+class Pedestrian
+object model
+object Animator
+enum PedestrianState
+}
+
++enum PedestrianState {
+    Idle
+    Walking
+    AvoidingCollision
+    SlowingDown
+    SwitchingGoal
+    Arrived
+}
+
+
+class Pedestrian {
+    +int id
+    +float maxWalkingSpeed
+    +float viewRadius
+    +float slowDownRadius
+    +Vector3 position
+    +Vector3 velocity
+    --
+    +Setup(int id, Vector3 spawnPosition) : void
+    -SetPath(List<Node> path) : void
+    +UpdateStatus(float deltaTime) : void
+    -MovePedestrian(Vector3 effectingForce) : void
+    .. Path following ..
+    -Seek(Vector3 target) : Vector3
+    -SeekWithOffset(Node target) : Vector3
+    -FollowCurvedPath(Edge curvedEdge) : Vector3
+    .. Collision Avoidance ..
+    -Vector3 AvoidCollision()
+    -PedestrianWithinViewRadius() : bool
+    -PedestrianWithinSafeZone() : bool
+    +GetDirection(Vector3 direction, int i) : Vector3
+    .. Data Transfer Object ..
+    +ToDTO() : PedestrianDTO
+}
+
++class PedestrianDTO
+{
+    +Id : int
+    +PositionX : float 
+    +PositionY : float 
+    +PositionZ : float 
+    +RotationY : float 
+    +Speed : float 
+}
+
+package graph {
+    +class Node {
+        +id : int
+        +position : Vector3
+        +radius : float
+    
+        +AddEdge(Node node, Edge edge) : void
+        +AddDirectedEdge(Node node, Edge edge) : void
+        +GetEdgeByNeighbor(Node neighbor) : Edge
+    }
+      
+    +class Edge {
+        +int id
+        +length : float
+        +width : float
+        .. curved edges ..
+        +radius : float
+        +center : Vector3
+    }
+    +enum EdgeType {
+        Straight,
+        Curve
+    }
+    
+    +class Graph {    
+        +Setup() : void
+        +SetGraphFrom(Node[] nodes, Edge[] edges, int[,] adjacencyMatrix) : void
+        +GetNodeById(int id) : Node
+        +GetEdgeById(int id) : Edge
+        +GetAdjacencyMatrix() : int[,]
+        -GetHighestId() : int
+        +{static} FindPath(Node start, Node end, out List<Node> path) : bool
+    }
+}
+
+Vehicle -- PedestrianController
+MonoBehaviour <|-- PedestrianController
+MonoBehaviour <|-- Pedestrian
+PedestrianController -[norank]-> "0..n" "Pedestrian GameObject" : "creates  "
+Pedestrian "1" o-- "0..n" Node : "path"
+Pedestrian "1" -- "1" Animator
+Pedestrian "1" -- "1" model
+Pedestrian "1" -- "1" PedestrianState : state
+PedestrianState <-- PedestrianDTO : uses
+Pedestrian --> PedestrianDTO : uses
+
+Graph "1" *-- "0..n" Node
+Graph "1" *-- "0..n" Edge
+PedestrianController "1" -- "1" Graph
+Edge "0..n" o-o "1..n" Node : "           "
+Edge "1" -- "1" EdgeType : "type"
+
+@enduml
